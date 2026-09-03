@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
 import RatingStars from "../components/RatingStars";
+import Avatar from "../components/Avatar";
 import Spinner from "../components/Spinner";
 
 export default function JobDetailHomeowner() {
@@ -140,12 +141,19 @@ export default function JobDetailHomeowner() {
             <p className="muted">No one has expressed interest yet.</p>
           ) : (
             <div className="stack">
-              {interested.map((p) => (
-                <div key={p.providerId} className="row-between" style={{ borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
-                  <div>
-                    <p style={{ fontWeight: 600 }}>{p.name}</p>
-                    <p className="muted" style={{ fontSize: "0.85rem" }}>{p.phone}</p>
-                    <RatingStars value={p.averageRating} size={13} />
+              {interested.map((p, i) => (
+                <div
+                  key={p.providerId}
+                  className="row-between animate-in"
+                  style={{ borderBottom: "1px solid var(--line)", paddingBottom: 10, animationDelay: `${i * 0.06}s` }}
+                >
+                  <div className="row" style={{ gap: 12 }}>
+                    <Avatar name={p.name} size={40} />
+                    <div>
+                      <p style={{ fontWeight: 600 }}>{p.name}</p>
+                      <p className="muted" style={{ fontSize: "0.85rem" }}>{p.phone}</p>
+                      <RatingStars value={p.averageRating} size={13} />
+                    </div>
                   </div>
                   <button className="btn btn-amber" disabled={busy} onClick={() => handleClaim(p.providerId)}>
                     <UserCheck size={16} /> Claim

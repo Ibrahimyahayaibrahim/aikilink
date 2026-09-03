@@ -3,10 +3,11 @@ import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLookups } from "../api/useLookups";
 import { api } from "../api/client";
+import Avatar from "../components/Avatar";
 import Spinner from "../components/Spinner";
 
 export default function ProviderProfilePage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const location = useLocation();
   const { categories, areas, loading: lookupsLoading } = useLookups();
 
@@ -71,7 +72,13 @@ export default function ProviderProfilePage() {
 
   return (
     <div className="app-main" style={{ maxWidth: 560 }}>
-      <h2 style={{ marginBottom: 4 }}>Your provider profile</h2>
+      <div className="row" style={{ gap: 14, marginBottom: 14 }}>
+        <Avatar name={user?.name} size={52} />
+        <div>
+          <h2 style={{ marginBottom: 2 }}>Your provider profile</h2>
+          <p className="muted" style={{ fontSize: "0.88rem" }}>{user?.name}</p>
+        </div>
+      </div>
       <p className="muted" style={{ marginBottom: 20 }}>
         Choose the service categories you offer and the areas you cover — job postings only reach you when both match.
       </p>

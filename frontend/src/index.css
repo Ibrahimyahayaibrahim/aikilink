@@ -749,3 +749,105 @@ a .docket:hover, a .card:hover {
   font-size: 0.78rem;
   color: rgba(243, 241, 235, 0.5);
 }
+
+/* ============================================================
+   v4 additions: avatar, nav-link hover motion, responsiveness
+   ============================================================ */
+
+.avatar {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.avatar-circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.avatar-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 28%;
+  height: 28%;
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+  background: var(--success);
+  border: 2px solid var(--ink);
+  animation: pulseDot 2s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(62, 125, 82, 0.5); }
+  50% { box-shadow: 0 0 0 3px rgba(62, 125, 82, 0); }
+}
+
+/* --- Nav link underline-on-hover --- */
+.nav-links a:not(.nav-cta) {
+  position: relative;
+  padding-bottom: 2px;
+}
+.nav-links a:not(.nav-cta)::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: -3px;
+  width: 0;
+  height: 2px;
+  background: var(--amber);
+  transition: width 0.2s ease;
+}
+.nav-links a:not(.nav-cta):hover::after {
+  width: 100%;
+}
+
+/* --- Page transition --- */
+.app-main {
+  animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ============================================================
+   Responsiveness pass
+   ============================================================ */
+
+@media (max-width: 480px) {
+  .hero { padding: 32px 16px; }
+  .hero h1 { font-size: 1.4rem; }
+  .hero p { font-size: 0.94rem; }
+  .hero-visual { height: 240px; transform: scale(0.82); transform-origin: top center; }
+  .btn { padding: 10px 15px; font-size: 0.9rem; }
+  .navbar-inner { padding: 12px 14px; }
+  .brand { font-size: 1rem; }
+  .card, .docket { padding: 14px; }
+  .feature-card { padding: 16px; }
+}
+
+@media (max-width: 380px) {
+  .hero-visual { transform: scale(0.7); }
+  .checkbox-grid { gap: 6px; }
+  .chip-checkbox { padding: 6px 11px; font-size: 0.8rem; }
+}
+
+/* Ensure long provider/homeowner names don't break nav layout on small screens */
+.nav-user {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Row of contact/claim buttons should stack cleanly on narrow screens */
+@media (max-width: 420px) {
+  .row-between { flex-wrap: wrap; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; }
+}

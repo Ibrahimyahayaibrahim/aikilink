@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Briefcase, Hammer, UserRound, LogOut, PlusCircle, Search, Menu, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import Logo from "./Logo";
+import Avatar from "./Avatar";
 
 export default function NavBar() {
   const { isAuthenticated, user, logout } = useAuth();
@@ -52,6 +53,7 @@ export default function NavBar() {
           {isAuthenticated && (
             <>
               <span className="nav-user">{user?.name}</span>
+              <Avatar name={user?.name} size={32} online />
               <button onClick={handleLogout} className="nav-logout" aria-label="Log out">
                 <LogOut size={15} />
               </button>

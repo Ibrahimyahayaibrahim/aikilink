@@ -4,6 +4,7 @@ import { PhoneCall } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
+import Avatar from "../components/Avatar";
 import Spinner from "../components/Spinner";
 
 export default function JobDetailProvider() {
@@ -87,15 +88,22 @@ export default function JobDetailProvider() {
       )}
 
       {contact && (
-        <div className="card">
+        <div className="card animate-in">
           <h3 style={{ marginBottom: 8 }}>Contact the homeowner</h3>
-          <p className="muted" style={{ fontSize: "0.85rem", marginBottom: 12 }}>
+          <p className="muted" style={{ fontSize: "0.85rem", marginBottom: 14 }}>
             Call now — this is first-come-first-served. The homeowner may claim any provider who calls, not necessarily you.
           </p>
-          <p style={{ fontWeight: 700, fontSize: "1.1rem" }}>{contact.name}</p>
-          <p style={{ fontSize: "1.3rem", color: "var(--teal)", fontWeight: 700 }}>
-            <a href={`tel:${contact.phone}`}>{contact.phone}</a>
-          </p>
+          <div className="row" style={{ gap: 14 }}>
+            <Avatar name={contact.name} size={48} />
+            <div>
+              <p style={{ fontWeight: 700, fontSize: "1.05rem" }}>{contact.name}</p>
+              <p style={{ fontSize: "1.15rem", color: "var(--teal)", fontWeight: 700 }}>
+                <a href={`tel:${contact.phone}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <PhoneCall size={16} /> {contact.phone}
+                </a>
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>
