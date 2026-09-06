@@ -15,6 +15,7 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import providerRoutes from "./routes/providerRoutes.js";
 import jobRoutes from "./routes/jobRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { categoryRouter, areaRouter } from "./routes/lookupRoutes.js";
 
 // Fail fast on weak/missing security-critical configuration rather than booting into an
@@ -58,6 +59,7 @@ app.use("/api/providers", providerRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/categories", categoryRouter);
 app.use("/api/areas", areaRouter);
+app.use("/api/notifications", notificationRoutes);
 
 // --- 404 + error handling ---
 app.use(notFound);

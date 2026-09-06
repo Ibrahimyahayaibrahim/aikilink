@@ -4,18 +4,9 @@ import ProviderProfile from "../models/ProviderProfile.js";
 import HomeownerProfile from "../models/HomeownerProfile.js";
 import Rating from "../models/Rating.js";
 import { isValidObjectId, isValidScore } from "../utils/validators.js";
+import Notification from "../models/Notification.js";
 
-/*
- * Note on "push" vs "pull" (Section 3.13):
- * This MVP has no websocket/SMS/push infrastructure (Section 3.6 — in-app only).
- * "Push" is realised as a dedicated endpoint (GET /api/jobs/matches) that returns Open
- * jobs matching the logged-in provider's own categories/coverageAreas automatically,
- * with no filters required from the provider. "Pull" (GET /api/jobs) is the same
- * underlying query but driven by filters the provider supplies explicitly. Both read
- * from the same JobPosting collection — there is no separate notification store.
- */
-
-const MAX_PAGE_SIZE = 100; // simple safety net against unbounded result-set responses
+const MAX_PAGE_SIZE = 100;
 
 async function getHomeownerProfileOrFail(userId) {
   const profile = await HomeownerProfile.findOne({ userId });
@@ -61,7 +52,6 @@ export const createJob = async (req, res) => {
     status: "Open",
   });
 
-  // Matching rule (Section 3.13): job.category IN provider.categories AND job.area IN provider.coverageAreas
   const matchingProviderCount = await ProviderProfile.countDocuments({
     categories: categoryId,
     coverageAreas: areaId,
@@ -70,7 +60,7 @@ export const createJob = async (req, res) => {
   res.status(201).json({ job, matchingProviderCount });
 };
 
-// GET /api/jobs  (FR8 — pull) — Provider only. Filters: category, area (Open jobs only)
+// GET /api/jobs  (FR8 — pull) — Provider only. 
 export const searchJobs = async (req, res) => {
   const { category, area } = req.query;
   const filter = { status: "Open" };
@@ -91,7 +81,7 @@ export const searchJobs = async (req, res) => {
   res.json(jobs);
 };
 
-// GET /api/jobs/matches  (FR7 — push) — Provider only. Auto-filtered by the provider's own profile.
+// GET /api/jobs/matches  (FR7 — push) — Provider only. 
 export const getMyMatches = async (req, res) => {
   const providerProfile = await getProviderProfileOrFail(req.user.id);
 
@@ -116,9 +106,8 @@ export const getMyJobs = async (req, res) => {
     .limit(MAX_PAGE_SIZE);
   res.json(jobs);
 };
+
 // GET /api/jobs/assigned — Provider only.
-// Lets a provider see their own current work (status Claimed) and past work (status
-// Completed) in one place.
 export const getMyAssignedJobs = async (req, res) => {
   const providerProfile = await getProviderProfileOrFail(req.user.id);
   const jobs = await JobPosting.find({ claimedBy: providerProfile._id })
@@ -128,7 +117,8 @@ export const getMyAssignedJobs = async (req, res) => {
     .limit(MAX_PAGE_SIZE);
   res.json(jobs);
 };
-// GET /api/jobs/:id  (id format already validated by validateObjectIdParam in the route)
+
+// GET /api/jobs/:id 
 export const getJobById = async (req, res) => {
   const job = await JobPosting.findById(req.params.id).populate("categoryId areaId claimedBy");
   if (!job) return res.status(404).json({ message: "Job not found" });
@@ -136,9 +126,6 @@ export const getJobById = async (req, res) => {
 };
 
 // POST /api/jobs/:id/interest  (FR9) — Provider only
-// Logs interest and reveals the homeowner's phone number, which is how the FCFS phone
-// call (outside the system, Section 3.15.2) actually gets initiated. Contact details are
-// scoped to exactly this job/provider pair, rather than being exposed more broadly.
 export const expressInterest = async (req, res) => {
   const job = await JobPosting.findById(req.params.id);
   if (!job) return res.status(404).json({ message: "Job not found" });
@@ -155,9 +142,27 @@ export const expressInterest = async (req, res) => {
   );
 
   const homeownerProfile = await HomeownerProfile.findById(job.homeownerId).populate({
-    path: "userId",
-    select: "name phone",
+  path: "userId",
+  select: "name phone _id", // Ensure _id is selected
+});
+
+if (homeownerProfile && homeownerProfile.userId) {
+  await Notification.create({
+    recipient: homeownerProfile.userId._id, // True User ID
+    type: "quote", 
+    title: "New Artisan Interest",
+    body: `${req.user.name} is interested in your job. Check their profile!`,
   });
+}
+  // Create notification for the homeowner
+  if (homeownerProfile && homeownerProfile.userId) {
+    await Notification.create({
+      recipient: homeownerProfile.userId._id, 
+      type: "quote", 
+      title: "New Artisan Interest",
+      body: `${req.user.name} is interested in your job. Check their profile!`,
+    });
+  }
 
   res.json({
     message: "Interest recorded",
@@ -168,13 +173,7 @@ export const expressInterest = async (req, res) => {
   });
 };
 
-// GET /api/jobs/:id/interested  — Homeowner only, must own the job.
-// Not in the original Table 3.14 spec — added because the frontend claim flow needs a
-// way to show the homeowner *who* has expressed interest (name, phone, providerId) so
-// they can match a caller's voice to a system record and claim the right provider. This
-// is a pull the homeowner triggers themselves (opening their job's detail screen), not a
-// push notification, so it doesn't contradict the "phone call is the notification"
-// design decision (Table 3.2) — it just makes the FCFS claim step actually usable.
+// GET /api/jobs/:id/interested  — Homeowner only
 export const getInterestedProviders = async (req, res) => {
   const job = await JobPosting.findById(req.params.id);
   if (!job) return res.status(404).json({ message: "Job not found" });
@@ -185,7 +184,7 @@ export const getInterestedProviders = async (req, res) => {
   }
 
   const interests = await JobInterestLog.find({ jobId: job._id })
-    .sort({ timestamp: 1 }) // earliest interest first, matching the FCFS spirit
+    .sort({ timestamp: 1 }) 
     .populate({
       path: "providerId",
       select: "averageRating userId",
@@ -193,7 +192,7 @@ export const getInterestedProviders = async (req, res) => {
     });
 
   const providers = interests
-    .filter((i) => i.providerId) // guard against a deleted provider profile
+    .filter((i) => i.providerId) 
     .map((i) => ({
       providerId: i.providerId._id,
       name: i.providerId.userId?.name,
@@ -205,7 +204,7 @@ export const getInterestedProviders = async (req, res) => {
   res.json(providers);
 };
 
-// PATCH /api/jobs/:id/claim  (FR10, FR11) — Homeowner only, must own the job
+// PATCH /api/jobs/:id/claim  (FR10, FR11) — Homeowner only
 export const claimJob = async (req, res) => {
   const { providerId } = req.body;
   if (!isValidObjectId(providerId)) {
@@ -223,9 +222,6 @@ export const claimJob = async (req, res) => {
     return res.status(409).json({ message: "Only an Open job can be claimed" });
   }
 
-  // Enforces the use case precondition (Table 3.4): the selected provider must actually
-  // have expressed interest first, rather than a homeowner being able to claim a job for
-  // an arbitrary provider id that never engaged with it.
   const hasExpressedInterest = await JobInterestLog.exists({ jobId: job._id, providerId });
   if (!hasExpressedInterest) {
     return res.status(409).json({ message: "This provider has not expressed interest in this job" });
@@ -236,8 +232,19 @@ export const claimJob = async (req, res) => {
   job.claimedAt = new Date();
   await job.save();
 
-  // FR11: other interested providers are implicitly "notified" the next time they poll
-  // GET /api/jobs/matches or GET /api/jobs, since the job no longer appears there.
+  // Notify the provider
+  // Notify the provider
+  const providerProfile = await ProviderProfile.findById(providerId).populate("userId");
+
+if (providerProfile && providerProfile.userId) {
+  await Notification.create({
+    recipient: providerProfile.userId._id, // True User ID
+    type: "claim",
+    title: "Job Claimed!",
+    body: `You have been selected for a new job. Check your active jobs!`,
+  });
+}
+
   const otherInterestedProviderIds = (
     await JobInterestLog.find({ jobId: job._id, providerId: { $ne: providerId } })
   ).map((i) => i.providerId);
@@ -320,7 +327,6 @@ export const submitRating = async (req, res) => {
     comment: comment || "",
   });
 
-  // Recompute the provider's average rating (FR17)
   const agg = await Rating.aggregate([
     { $match: { providerId: job.claimedBy } },
     { $group: { _id: "$providerId", avg: { $avg: "$score" } } },
