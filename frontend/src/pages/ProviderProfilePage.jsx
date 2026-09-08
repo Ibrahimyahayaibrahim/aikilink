@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  AlertCircle, ArrowLeft, BadgeCheck, Check, Cog, Droplets, Flame, Hammer,
-  KeyRound, LayoutGrid, MapPin, PaintRoller, PlugZap, Save, ShieldCheck,
-  Snowflake, Sparkles, SprayCan, UserRound, Wrench, Zap,
+  AlertCircle, ArrowLeft, BadgeCheck, Check, ChevronDown, Cog, Droplets, Flame, Hammer,
+  KeyRound, LayoutGrid, MapPin, PaintRoller, PlugZap, Save, Search, ShieldCheck,
+  Snowflake, Sparkles, SprayCan, UserRound, Wrench, X, Zap,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useLookups } from "../api/useLookups";
 import { api } from "../api/client";
 import Avatar from "../components/Avatar";
 import Spinner from "../components/Spinner";
+
+import { nigerianLocations } from "../data/nigerianLocations";
 
 const ROUTES = { feed: "/provider" };
 
@@ -35,85 +37,151 @@ const BIO_MAX = 400;
 export default function ProviderProfilePage() {
   const { token, user } = useAuth();
   const location = useLocation();
-  const { categories, areas, loading: lookupsLoading } = useLookups();
+  const { categories, loading: lookupsLoading } = useLookups();
 
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [selectedAreas, setSelectedAreas] = useState([]);
+  // Category multi-select state
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+
+  // Location state (replaces coverageAreas)
+  const [selectedState, setSelectedState] = useState("");
+  const [lga, setLga] = useState("");
+  const [stateSearch, setStateSearch] = useState("");
+  const [isStateOpen, setIsStateOpen] = useState(false);
+  const [lgaSearch, setLgaSearch] = useState("");
+  const [isLgaOpen, setIsLgaOpen] = useState(false);
+
   const [bio, setBio] = useState("");
   const [idDocumentUrl, setIdDocumentUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [snapshot, setSnapshot] = useState(null); // for dirty-state detection
+  const [snapshot, setSnapshot] = useState(null);
 
+  // Cascading LGAs
+  const availableLGAs = selectedState ? nigerianLocations[selectedState] : [];
+
+  /*
+   * ⚠️ DO NOT ADD: useEffect(() => { setLga(""); }, [selectedState]);
+   * That effect wiped the LGA on mount right after the profile fetch set it
+   * (selectedState changes "" -> "Oyo", the effect fires, setLga("")).
+   * The LGA reset is handled ONLY in the State dropdown's onClick below.
+   */
+
+  // Filtered arrays
+  const filteredCategories = categories.filter(c =>
+    c.name.toLowerCase().includes(categorySearch.toLowerCase())
+  );
+  const filteredStates = Object.keys(nigerianLocations).filter(s =>
+    s.toLowerCase().includes(stateSearch.toLowerCase())
+  );
+  const filteredLGAs = availableLGAs.filter(l =>
+    l.toLowerCase().includes(lgaSearch.toLowerCase())
+  );
+
+  // Selected category objects for display
+  const selectedCategories = categories.filter(c => selectedCategoryIds.includes(c._id));
+
+  // Load profile
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const profile = await api.get("/providers/me", token);
+        console.log("[ProviderProfile] loaded profile:", profile);
         if (!cancelled) {
           const cats = (profile.categories || []).map((c) => c._id);
-          const cov = (profile.coverageAreas || []).map((a) => a._id);
           const b = profile.bio || "";
           const doc = profile.idDocumentUrl || "";
-          setSelectedCategories(cats);
-          setSelectedAreas(cov);
+          const state = profile.state || "";
+          const savedLga = profile.lga || "";
+          setSelectedCategoryIds(cats);
+          setSelectedState(state);
+          setLga(savedLga);
           setBio(b);
           setIdDocumentUrl(doc);
-          setSnapshot({ cats: [...cats].sort().join(","), cov: [...cov].sort().join(","), b, doc });
+          setSnapshot({
+            cats: [...cats].sort().join(","),
+            state,
+            lga: savedLga,
+            b,
+            doc
+          });
         }
       } catch (err) {
-        /* brand-new provider — nothing to prefill */
+        /* DO NOT swallow silently — a 500 here (e.g. a stale backend populating a
+           removed path) used to render the whole form blank with no explanation. */
+        if (!cancelled) {
+          setError("Could not load your saved profile — " + (err.message || "server error") + ". Restart the backend if this persists.");
+        }
       } finally {
         if (!cancelled) setProfileLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [token]);
 
-  const toggle = (list, setList, id) => {
-    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  // Toggle category selection
+  const toggleCategory = (categoryId) => {
+    setSelectedCategoryIds(prev =>
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  // Remove category from selection
+  const removeCategory = (categoryId) => {
+    setSelectedCategoryIds(prev => prev.filter(id => id !== categoryId));
   };
 
   const dirty = useMemo(() => {
     if (!snapshot) return false;
     return (
-      [...selectedCategories].sort().join(",") !== snapshot.cats ||
-      [...selectedAreas].sort().join(",") !== snapshot.cov ||
+      [...selectedCategoryIds].sort().join(",") !== snapshot.cats ||
+      selectedState !== snapshot.state ||
+      lga !== snapshot.lga ||
       bio !== snapshot.b ||
       idDocumentUrl !== snapshot.doc
     );
-  }, [selectedCategories, selectedAreas, bio, idDocumentUrl, snapshot]);
+  }, [selectedCategoryIds, selectedState, lga, bio, idDocumentUrl, snapshot]);
 
   const completeness = useMemo(() => {
     let score = 0;
-    if (selectedCategories.length > 0) score += 35;
-    if (selectedAreas.length > 0) score += 35;
+    if (selectedCategoryIds.length > 0) score += 35;
+    if (selectedState && lga) score += 35;
     if (bio.trim().length >= 20) score += 15;
     if (idDocumentUrl.trim()) score += 15;
     return score;
-  }, [selectedCategories, selectedAreas, bio, idDocumentUrl]);
+  }, [selectedCategoryIds, selectedState, lga, bio, idDocumentUrl]);
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
+    const payload = {
+      categories: selectedCategoryIds,
+      state: selectedState,
+      lga: lga,
+      bio
+    };
+    console.log("[ProviderProfile] saving payload:", payload);
     try {
-      await api.put("/providers/me", { categories: selectedCategories, coverageAreas: selectedAreas, bio }, token);
+      await api.put("/providers/me", payload, token);
       if (idDocumentUrl.trim()) {
         await api.post("/providers/me/id-upload", { idDocumentUrl: idDocumentUrl.trim() }, token);
       }
       setSnapshot({
-        cats: [...selectedCategories].sort().join(","),
-        cov: [...selectedAreas].sort().join(","),
+        cats: [...selectedCategoryIds].sort().join(","),
+        state: selectedState,
+        lga: lga,
         b: bio,
         doc: idDocumentUrl,
       });
-      setMessage("Profile saved. You'll now be matched with jobs in your selected categories and areas.");
+      setMessage("Profile saved. You'll now be matched with jobs in your selected categories and location.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -184,7 +252,7 @@ export default function ProviderProfilePage() {
               <p className="mt-1.5 text-[11px] font-medium text-mist">
                 {completeness === 100
                   ? "Complete — you're fully matchable."
-                  : "Add trades, areas, a bio and ID to reach 100%."}
+                  : "Add trades, location, a bio and ID to reach 100%."}
               </p>
             </div>
           </div>
@@ -214,85 +282,222 @@ export default function ProviderProfilePage() {
       <form id="profile-form" onSubmit={handleSave} className="mt-6 grid items-start gap-6 lg:grid-cols-[1fr_300px]">
         {/* ---------- main form ---------- */}
         <div className="anim-up space-y-6 rounded-2xl border border-line bg-card p-5 shadow-sm md:p-7" style={{ animationDelay: "0.12s" }}>
-          {/* categories */}
-          <div>
+          {/* categories - multi-select combobox */}
+          <div className="relative">
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-mist">
                 <span className="mr-1.5 text-amber-600">01</span> Service categories
               </span>
-              <span className="text-[11px] font-bold text-mist/70">{selectedCategories.length} selected</span>
+              <span className="text-[11px] font-bold text-mist/70">{selectedCategoryIds.length} selected</span>
             </div>
             <p className="mt-1 text-xs font-medium text-mist">Job postings only reach you when the trade matches.</p>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {categories.map((c) => {
-                const active = selectedCategories.includes(c._id);
-                return (
-                  <button
+
+            {/* Selected category chips */}
+            {selectedCategoryIds.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {selectedCategories.map((c) => (
+                  <span
                     key={c._id}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={active}
-                    tabIndex={0}
-                    onClick={() => toggle(selectedCategories, setSelectedCategories, c._id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        toggle(selectedCategories, setSelectedCategories, c._id);
-                      }
-                    }}
-                    className={`btn-press flex items-center justify-center gap-2 rounded-2xl border px-2 py-3.5 text-xs font-bold transition-all duration-200 ${
-                      active
-                        ? "border-pine bg-pine text-cream shadow-md"
-                        : "border-line bg-cream text-mist hover:-translate-y-0.5 hover:border-pine/40 hover:text-pine"
-                    }`}
+                    className="anim-scale inline-flex items-center gap-1 rounded-full bg-pine-100 px-2.5 py-1 text-[11px] font-bold text-pine-800"
                   >
-                    <TradeIcon name={c.name} className={`h-4 w-4 shrink-0 ${active ? "text-amber-400" : ""}`} />
-                    <span className="truncate">{c.name}</span>
-                    {active && <Check className="anim-scale h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                  </button>
-                );
-              })}
+                    <TradeIcon name={c.name} className="h-3 w-3" />
+                    {c.name}
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(c._id)}
+                      className="hover:bg-pine-200 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="h-3 w-3 text-pine-600" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Category dropdown */}
+            <div className="relative mt-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCategoryOpen(!isCategoryOpen);
+                  if (!isCategoryOpen) setCategorySearch("");
+                }}
+                className="w-full rounded-2xl border border-line bg-cream px-4 py-3 text-left text-sm text-ink outline-none transition-all duration-200 placeholder:text-mist/60 focus:bg-card focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-pine-600/70" />
+                  <span className="text-mist/60">Search or add categories...</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-mist shrink-0" />
+              </button>
+              {isCategoryOpen && (
+                <div className="absolute z-30 mt-1 w-full rounded-2xl border border-line bg-white shadow-xl overflow-hidden">
+                  <div className="p-2">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mist" />
+                      <input
+                        type="text"
+                        value={categorySearch}
+                        onChange={(e) => setCategorySearch(e.target.value)}
+                        placeholder="Search categories..."
+                        className="w-full rounded-xl border border-line bg-cream pl-10 pr-4 py-2 text-sm text-ink placeholder:text-mist/60 focus:outline-none focus:ring-2 focus:ring-amber-500/25"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <ul className="max-h-60 overflow-y-auto p-1">
+                    {filteredCategories.map((c) => {
+                      const isSelected = selectedCategoryIds.includes(c._id);
+                      return (
+                        <li
+                          key={c._id}
+                          onClick={() => toggleCategory(c._id)}
+                          className={`cursor-pointer rounded-xl px-3 py-2 text-sm transition-colors duration-200 flex items-center gap-2 ${
+                            isSelected
+                              ? "bg-pine-50 text-pine-800"
+                              : "hover:bg-pine-50/50 hover:text-pine-800"
+                          }`}
+                        >
+                          <TradeIcon name={c.name} className="h-4 w-4 text-pine-600" />
+                          {c.name}
+                          {isSelected && <Check className="h-4 w-4 text-amber-500 ml-auto" />}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* coverage areas */}
+          {/* location - cascading dropdowns */}
           <div>
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-mist">
-                <span className="mr-1.5 text-amber-600">02</span> Coverage areas
+                <span className="mr-1.5 text-amber-600">02</span> Service location
               </span>
-              <span className="text-[11px] font-bold text-mist/70">{selectedAreas.length} selected</span>
+              {selectedState && lga && (
+                <span className="text-[11px] font-bold text-emerald-600">Location set</span>
+              )}
             </div>
-            <p className="mt-1 text-xs font-medium text-mist">…and when the job is in an area you cover.</p>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {areas.map((a) => {
-                const active = selectedAreas.includes(a._id);
-                return (
+            <p className="mt-1 text-xs font-medium text-mist">Jobs must match your state and LGA to reach you.</p>
+
+            <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {/* State dropdown */}
+              <div className="relative">
+                <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-mist">State</label>
+                <div className="relative mt-1.5">
                   <button
-                    key={a._id}
                     type="button"
-                    role="checkbox"
-                    aria-checked={active}
-                    tabIndex={0}
-                    onClick={() => toggle(selectedAreas, setSelectedAreas, a._id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        toggle(selectedAreas, setSelectedAreas, a._id);
+                    onClick={() => {
+                      setIsStateOpen(!isStateOpen);
+                      if (!isStateOpen) setStateSearch("");
+                    }}
+                    className="w-full rounded-2xl border border-line bg-cream px-4 py-3 text-left text-sm text-ink outline-none transition-all duration-200 placeholder:text-mist/60 focus:bg-card focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-pine-600/70" />
+                      <span className={selectedState ? "text-ink" : "text-mist/60"}>
+                        {selectedState || "Select a state..."}
+                      </span>
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-mist shrink-0" />
+                  </button>
+                  {isStateOpen && (
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border border-line bg-white shadow-xl overflow-hidden">
+                      <div className="p-2">
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mist" />
+                          <input
+                            type="text"
+                            value={stateSearch}
+                            onChange={(e) => setStateSearch(e.target.value)}
+                            placeholder="Search states..."
+                            className="w-full rounded-xl border border-line bg-cream pl-10 pr-4 py-2 text-sm text-ink placeholder:text-mist/60 focus:outline-none focus:ring-2 focus:ring-amber-500/25"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <ul className="max-h-60 overflow-y-auto p-1">
+                        {filteredStates.map((s) => (
+                          <li
+                            key={s}
+                            onClick={() => {
+                              setSelectedState(s);
+                              setLga("");
+                              setIsStateOpen(false);
+                              setStateSearch("");
+                            }}
+                            className="cursor-pointer rounded-xl px-3 py-2 text-sm hover:bg-pine-50/50 hover:text-pine-800 transition-colors duration-200"
+                          >
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* LGA dropdown */}
+              <div className="relative">
+                <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-mist">LGA</label>
+                <div className="relative mt-1.5">
+                  <button
+                    type="button"
+                    disabled={!selectedState}
+                    onClick={() => {
+                      if (selectedState) {
+                        setIsLgaOpen(!isLgaOpen);
+                        if (!isLgaOpen) setLgaSearch("");
                       }
                     }}
-                    className={`btn-press flex items-center justify-center gap-2 rounded-2xl border px-2 py-3.5 text-xs font-bold transition-all duration-200 ${
-                      active
-                        ? "border-pine bg-pine text-cream shadow-md"
-                        : "border-line bg-cream text-mist hover:-translate-y-0.5 hover:border-pine/40 hover:text-pine"
+                    className={`w-full rounded-2xl border bg-cream px-4 py-3 text-left text-sm text-ink outline-none transition-all duration-200 placeholder:text-mist/60 focus:bg-card focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 flex items-center justify-between ${
+                      !selectedState ? 'cursor-not-allowed opacity-50 bg-black/5' : ''
                     }`}
                   >
-                    <MapPin className={`h-4 w-4 shrink-0 ${active ? "text-amber-400" : ""}`} />
-                    <span className="truncate">{a.name}, {a.city}</span>
-                    {active && <Check className="anim-scale h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                    <span className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-pine-600/70" />
+                      <span className={lga ? "text-ink" : "text-mist/60"}>
+                        {lga || (selectedState ? "Select an LGA..." : "Select a State first")}
+                      </span>
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-mist shrink-0" />
                   </button>
-                );
-              })}
+                  {isLgaOpen && selectedState && (
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border border-line bg-white shadow-xl overflow-hidden">
+                      <div className="p-2">
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mist" />
+                          <input
+                            type="text"
+                            value={lgaSearch}
+                            onChange={(e) => setLgaSearch(e.target.value)}
+                            placeholder="Search LGAs..."
+                            className="w-full rounded-xl border border-line bg-cream pl-10 pr-4 py-2 text-sm text-ink placeholder:text-mist/60 focus:outline-none focus:ring-2 focus:ring-amber-500/25"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <ul className="max-h-60 overflow-y-auto p-1">
+                        {filteredLGAs.map((l) => (
+                          <li
+                            key={l}
+                            onClick={() => {
+                              setLga(l);
+                              setIsLgaOpen(false);
+                              setLgaSearch("");
+                            }}
+                            className="cursor-pointer rounded-xl px-3 py-2 text-sm hover:bg-pine-50/50 hover:text-pine-800 transition-colors duration-200"
+                          >
+                            {l}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -388,19 +593,19 @@ export default function ProviderProfilePage() {
                     {verified && <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600" />}
                   </p>
                   <p className="truncate text-[11px] font-medium text-mist">
-                    {selectedCategories.length
-                      ? categories.filter((c) => selectedCategories.includes(c._id)).slice(0, 2).map((c) => c.name).join(" · ")
+                    {selectedCategoryIds.length
+                      ? selectedCategories.slice(0, 2).map((c) => c.name).join(" · ")
                       : "No trades set"}
                   </p>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {areas.filter((a) => selectedAreas.includes(a._id)).slice(0, 3).map((a) => (
-                  <span key={a._id} className="anim-scale inline-flex items-center gap-1 rounded-full bg-pine-50 px-2 py-1 text-[10px] font-bold text-pine-700">
-                    <MapPin className="h-2.5 w-2.5" /> {a.name}
+                {selectedState && lga && (
+                  <span className="anim-scale inline-flex items-center gap-1 rounded-full bg-pine-50 px-2 py-1 text-[10px] font-bold text-pine-700">
+                    <MapPin className="h-2.5 w-2.5" /> {lga}, {selectedState}
                   </span>
-                ))}
-                {selectedAreas.length === 0 && <span className="text-[11px] font-medium text-mist/70">No coverage areas yet</span>}
+                )}
+                {!selectedState && !lga && <span className="text-[11px] font-medium text-mist/70">No location set</span>}
               </div>
               {bio.trim() && <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-ink/80">{bio}</p>}
             </div>
@@ -409,7 +614,7 @@ export default function ProviderProfilePage() {
           <div className="flex gap-3 rounded-2xl border border-pine-100 bg-pine-50 p-4">
             <Sparkles className="h-5 w-5 shrink-0 text-pine-700" />
             <p className="text-xs leading-relaxed text-pine-800">
-              <span className="font-bold">Matching rule:</span> a job reaches you only when <span className="font-bold">both</span> its trade and area match your selections.
+              <span className="font-bold">Matching rule:</span> a job reaches you only when <span className="font-bold">both</span> its trade and location match your selections.
             </p>
           </div>
         </aside>

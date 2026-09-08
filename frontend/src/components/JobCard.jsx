@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Bookmark, Clock, MapPin, Users, Zap } from "lucide-react";
 import StatusBadge from "./StatusBadge";
 
-/* Kept from your original JobCard — same helper, same behaviour. */
 function timeAgo(dateStr) {
   const diffMs = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -16,27 +15,26 @@ function timeAgo(dateStr) {
 
 const ngn = (n) => "₦" + Number(n).toLocaleString("en-NG");
 
-/* ================================================================
-   JobCard — same props as your original: { job, linkTo }.
-   New (optional): index — pass the map index for staggered entrances:
-     {jobs.map((job, i) => <JobCard key={job._id} job={job} linkTo={...} index={i} />)}
-   Budget / applicant fields are defensive: if your JobPosting model
-   uses different field names, they simply won't render — no crash.
-   ================================================================ */
+/* Safe location display — null-guarded so cards can't crash the list
+   while the API is loading or for unmigrated jobs. */
+function jobLocation(job) {
+  if (!job) return null;
+  if (job.lga && job.state) return `${job.lga}, ${job.state}`;
+  return null;
+}
+
 export default function JobCard({ job, linkTo, index = 0 }) {
   const [saved, setSaved] = useState(false);
 
   const category = job.categoryId?.name || "Category";
-  const area = job.areaId ? `${job.areaId.name}, ${job.areaId.city}` : "Area";
+  const area = (job?.lga && job?.state) ? `${job.lga}, ${job.state}` : "Location pending";
 
-  /* Adjust these lookups if your model names the fields differently. */
   const applicants = job.applicants || job.interests || [];
   const min = job.budgetMin || job.budget_min;
   const max = job.budgetMax || job.budget_max;
 
   const content = (
     <>
-      {/* top row: trade chip + urgency */}
       <div className="flex items-center gap-2 pr-10">
         <span className="inline-flex items-center rounded-full bg-pine-50 px-2.5 py-1 text-[11px] font-bold text-pine-700">
           {category}
@@ -48,7 +46,6 @@ export default function JobCard({ job, linkTo, index = 0 }) {
         )}
       </div>
 
-      {/* save toggle — local state for now; wire to your API when ready */}
       <button
         onClick={(e) => {
           e.preventDefault();
@@ -63,7 +60,6 @@ export default function JobCard({ job, linkTo, index = 0 }) {
         <Bookmark className={`h-[18px] w-[18px] ${saved ? "fill-amber-500 text-amber-500" : ""}`} />
       </button>
 
-      {/* title + description */}
       <h3 className="mt-3 line-clamp-2 font-brand text-[17px] font-bold leading-snug text-ink transition-colors group-hover:text-pine-700">
         {job.title}
       </h3>
@@ -71,7 +67,6 @@ export default function JobCard({ job, linkTo, index = 0 }) {
         {job.description?.length > 160 ? job.description.slice(0, 160) + "…" : job.description}
       </p>
 
-      {/* meta row */}
       <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-mist">
         <span className="inline-flex items-center gap-1.5">
           <MapPin className="h-3.5 w-3.5 text-pine-600/70" /> {area}
@@ -86,7 +81,6 @@ export default function JobCard({ job, linkTo, index = 0 }) {
         )}
       </div>
 
-      {/* footer: budget + status + view link */}
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-line/80 pt-4">
         {min || max ? (
           <span className="font-brand text-[15px] font-bold text-pine">

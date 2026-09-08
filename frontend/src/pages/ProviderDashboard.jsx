@@ -76,10 +76,17 @@ const TICKER = [
   "Urgent jobs are shown first — keep notifications on",
 ];
 
+// Safe location display — falls back for unmigrated jobs and null objects
+function jobLocation(job) {
+  if (!job) return null;
+  if (job.lga && job.state) return `${job.lga}, ${job.state}`;
+  return null;
+}
+
 /* ---------- available-job card (provider flavour) ---------- */
 function MatchCard({ job, index, interested, busy, onInterest }) {
   const category = job.categoryId?.name || "Job";
-  const area = job.areaId ? `${job.areaId.name}, ${job.areaId.city}` : "";
+  const location = jobLocation(job);
   const min = job.budgetMin || job.budget_min;
   const max = job.budgetMax || job.budget_max;
 
@@ -101,15 +108,19 @@ function MatchCard({ job, index, interested, busy, onInterest }) {
 
       <Link to={ROUTES.jobDetail(job._id)} className="mt-3 block">
         <h3 className="line-clamp-2 font-brand text-[17px] font-bold leading-snug text-ink transition-colors group-hover:text-pine-700">
-          {job.title || `${category} needed in ${job.areaId?.name || "your area"}`}
+          {job.title || `${category} needed${location ? ` in ${location}` : ""}`}
         </h3>
       </Link>
       <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-mist">{job.description}</p>
 
       <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-mist">
-        {area && (
+        {location ? (
           <span className="inline-flex items-center gap-1.5">
-            <MapPin className="h-3.5 w-3.5 text-pine-600/70" /> {area}
+            <MapPin className="h-3.5 w-3.5 text-pine-600/70" /> {location}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-mist/60">
+            <MapPin className="h-3.5 w-3.5 text-pine-600/40" /> Location pending
           </span>
         )}
         <span className="inline-flex items-center gap-1.5">
@@ -179,9 +190,7 @@ export default function ProviderDashboard() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [token]);
 
   const loadAllJobs = async () => {
@@ -221,8 +230,10 @@ export default function ProviderDashboard() {
 
   const feed = tab === "matches" ? matches : allJobs;
   const categories = profile?.categories || [];
-  const areas = profile?.coverageAreas || [];
-  const profileReady = categories.length > 0 && areas.length > 0;
+
+  // Read location directly from profile state/lga strings
+  const hasProfileLocation = Boolean(profile?.state && profile?.lga);
+  const profileReady = categories.length > 0 && hasProfileLocation;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -270,11 +281,15 @@ export default function ProviderDashboard() {
             </p>
           </div>
           <div className="ml-auto flex flex-wrap gap-1.5">
-            {areas.slice(0, 4).map((a) => (
-              <span key={a._id} className="inline-flex items-center gap-1 rounded-full border border-cream/25 px-2.5 py-1 text-[10px] font-bold text-cream/90">
-                <MapPin className="h-2.5 w-2.5" /> {a.name}
+            {hasProfileLocation ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-cream/25 px-2.5 py-1 text-[10px] font-bold text-cream/90">
+                <MapPin className="h-2.5 w-2.5" /> {profile.lga}, {profile.state}
               </span>
-            ))}
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 px-2.5 py-1 text-[10px] font-bold text-amber-300">
+                <MapPin className="h-2.5 w-2.5" /> Location not set
+              </span>
+            )}
           </div>
         </div>
         {!profileReady && (
@@ -283,7 +298,7 @@ export default function ProviderDashboard() {
             className="anim-scale relative mt-4 flex items-center gap-2.5 rounded-2xl border border-amber-400/50 bg-amber-500/15 px-4 py-3 text-xs font-bold text-amber-300 transition-colors hover:bg-amber-500/25"
           >
             <AlertCircle className="h-4 w-4 shrink-0" />
-            Your profile is incomplete — set your trades and coverage areas to start receiving matches.
+            Your profile is incomplete — set your trades and location to start receiving matches.
           </Link>
         )}
       </section>
@@ -344,34 +359,42 @@ export default function ProviderDashboard() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {assigned.map((job, i) => (
-              <Link
-                key={job._id}
-                to={ROUTES.jobDetail(job._id)}
-                className="anim-up group flex flex-col rounded-2xl border border-line bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-pine/25 hover:shadow-xl"
-                style={{ animationDelay: `${0.14 + Math.min(i, 6) * 0.07}s` }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-pine-50 px-2.5 py-1 text-[11px] font-bold text-pine-700">
-                    {job.categoryId?.name || "Job"}
-                  </span>
-                  <StatusBadge status={job.status} />
-                </div>
-                <h3 className="mt-3 line-clamp-2 font-brand text-[16px] font-bold leading-snug text-ink transition-colors group-hover:text-pine-700">
-                  {job.title || job.description?.slice(0, 60) || "Job"}
-                </h3>
-                <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-mist">{job.description}</p>
-                <div className="mt-4 flex items-center justify-between border-t border-line/80 pt-3.5 text-xs font-medium text-mist">
-                  <span className="inline-flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-pine-600/70" />
-                    {job.areaId ? `${job.areaId.name}, ${job.areaId.city}` : "Area"}
-                  </span>
-                  <span className="inline-flex items-center gap-1 font-bold text-pine-700 transition-colors group-hover:text-amber-600">
-                    Open <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-                  </span>
-                </div>
-              </Link>
-            ))}
+            {assigned.map((job, i) => {
+              const location = jobLocation(job);
+              return (
+                <Link
+                  key={job._id}
+                  to={ROUTES.jobDetail(job._id)}
+                  className="anim-up group flex flex-col rounded-2xl border border-line bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-pine/25 hover:shadow-xl"
+                  style={{ animationDelay: `${0.14 + Math.min(i, 6) * 0.07}s` }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-pine-50 px-2.5 py-1 text-[11px] font-bold text-pine-700">
+                      {job.categoryId?.name || "Job"}
+                    </span>
+                    <StatusBadge status={job.status} />
+                  </div>
+                  <h3 className="mt-3 line-clamp-2 font-brand text-[16px] font-bold leading-snug text-ink transition-colors group-hover:text-pine-700">
+                    {job.title || job.description?.slice(0, 60) || "Job"}
+                  </h3>
+                  <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-mist">{job.description}</p>
+                  <div className="mt-4 flex items-center justify-between border-t border-line/80 pt-3.5 text-xs font-medium text-mist">
+                    {location ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-pine-600/70" /> {location}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-mist/60">
+                        <MapPin className="h-3.5 w-3.5 text-pine-600/40" /> Location pending
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1 font-bold text-pine-700 transition-colors group-hover:text-amber-600">
+                      Open <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>
@@ -382,7 +405,7 @@ export default function ProviderDashboard() {
           <div>
             <h2 className="font-brand text-xl font-bold tracking-tight text-ink md:text-2xl">Available jobs</h2>
             <p className="mt-0.5 text-sm text-mist">
-              {tab === "matches" ? "Matched to your trades and coverage areas." : "Every open job on the platform."}
+              {tab === "matches" ? "Matched to your trades and location." : "Every open job on the platform."}
             </p>
           </div>
           <div className="flex rounded-2xl border border-line bg-card p-1">
@@ -418,7 +441,7 @@ export default function ProviderDashboard() {
             <h3 className="mt-4 font-brand text-lg font-bold text-ink">No jobs here yet</h3>
             <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-mist">
               {tab === "matches"
-                ? "Make sure your categories and coverage areas are set on your profile."
+                ? "Make sure your categories and location are set on your profile."
                 : "Try a different filter, or check back soon."}
             </p>
             {tab === "matches" && (

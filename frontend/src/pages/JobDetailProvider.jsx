@@ -10,7 +10,6 @@ import StatusBadge from "../components/StatusBadge";
 import Avatar from "../components/Avatar";
 import Spinner from "../components/Spinner";
 
-/* Keep in sync with the ROUTES map in NavBar.jsx */
 const ROUTES = { back: "/provider" };
 
 function timeAgo(dateStr) {
@@ -25,7 +24,13 @@ function timeAgo(dateStr) {
   return `${days} day${days > 1 ? "s" : ""} ago`;
 }
 
-/* ---------- status timeline (same stages as the homeowner view) ---------- */
+/* Safe location — null-guarded so the page can't white-screen while loading. */
+function jobLocation(job) {
+  if (!job) return null;
+  if (job.lga && job.state) return `${job.lga}, ${job.state}`;
+  return null;
+}
+
 const STEPS = [
   { key: "open", label: "Open", icon: Briefcase },
   { key: "claimed", label: "Claimed", icon: UserCheck },
@@ -49,22 +54,12 @@ function StatusTimeline({ status }) {
             <div key={step.key} className="flex flex-1 flex-col items-center">
               <div className="flex w-full items-center">
                 <span className={`h-[3px] flex-1 rounded-full transition-colors duration-500 ${i === 0 ? "opacity-0" : done || active ? "bg-pine" : "bg-line"}`} />
-                <span
-                  className={`relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition-all duration-300 ${
-                    done
-                      ? "border-pine bg-pine text-cream"
-                      : active
-                        ? "pulse-soft border-amber-500 bg-amber-500 text-pine-900"
-                        : "border-line bg-cream text-mist"
-                  }`}
-                >
+                <span className={`relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition-all duration-300 ${done ? "border-pine bg-pine text-cream" : active ? "pulse-soft border-amber-500 bg-amber-500 text-pine-900" : "border-line bg-cream text-mist"}`}>
                   {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-[18px] w-[18px]" />}
                 </span>
                 <span className={`h-[3px] flex-1 rounded-full transition-colors duration-500 ${i === STEPS.length - 1 ? "opacity-0" : done ? "bg-pine" : "bg-line"}`} />
               </div>
-              <span className={`mt-2 text-center text-[10px] font-bold leading-tight md:text-[11px] ${active ? "text-amber-600" : done ? "text-pine" : "text-mist/70"}`}>
-                {step.label}
-              </span>
+              <span className={`mt-2 text-center text-[10px] font-bold leading-tight md:text-[11px] ${active ? "text-amber-600" : done ? "text-pine" : "text-mist/70"}`}>{step.label}</span>
             </div>
           );
         })}
@@ -82,7 +77,6 @@ const HOW_IT_WORKS = [
 export default function JobDetailProvider() {
   const { id } = useParams();
   const { token } = useAuth();
-
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -102,22 +96,14 @@ export default function JobDetailProvider() {
     }
   }, [id, token]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  /* Identical to the original: interest response carries the contact. */
   const handleExpressInterest = async () => {
-    setBusy(true);
-    setError("");
+    setBusy(true); setError("");
     try {
       const data = await api.post(`/jobs/${id}/interest`, {}, token);
       setContact(data.contact);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
 
   const copyPhone = async () => {
@@ -126,9 +112,7 @@ export default function JobDetailProvider() {
       await navigator.clipboard.writeText(contact.phone);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      /* clipboard blocked — the tel: link still works */
-    }
+    } catch (err) { /* clipboard blocked — the tel: link still works */ }
   };
 
   if (loading) {
@@ -154,17 +138,16 @@ export default function JobDetailProvider() {
 
   const isOpen = job.status === "Open";
   const claimedName = job.claimedBy?.userId?.name || job.claimedBy?.name;
+  const locationLabel = (job?.lga && job?.state) ? `${job.lga}, ${job.state}` : "Location pending";
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      {/* back link */}
       <div className="anim-up">
         <Link to={ROUTES.back} className="btn-press inline-flex items-center gap-1.5 text-sm font-bold text-mist transition-colors hover:text-pine">
           <ArrowLeft className="h-4 w-4" /> Back to job feed
         </Link>
       </div>
 
-      {/* header card */}
       <section className="anim-up overflow-hidden rounded-2xl border border-line bg-card shadow-sm" style={{ animationDelay: "0.06s" }}>
         <div className="dot-grid relative bg-pine px-5 py-4 md:px-6">
           <span className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full border-[12px] border-amber-500/15" />
@@ -182,11 +165,11 @@ export default function JobDetailProvider() {
         </div>
         <div className="p-5 md:p-6">
           <h1 className="font-brand text-xl font-bold leading-snug tracking-tight text-ink md:text-2xl">
-            {job.categoryId?.name} — {job.areaId?.name}, {job.areaId?.city}
+            {job.categoryId?.name} — {locationLabel}
           </h1>
           <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-mist">
             <span className="inline-flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5 text-pine-600/70" /> {job.areaId?.name}, {job.areaId?.city}
+              <MapPin className="h-3.5 w-3.5 text-pine-600/70" /> {locationLabel}
             </span>
             {job.created_at && (
               <span className="inline-flex items-center gap-1.5">
@@ -206,7 +189,6 @@ export default function JobDetailProvider() {
         </div>
       </section>
 
-      {/* timeline */}
       <StatusTimeline status={job.status} />
 
       {error && (
@@ -218,28 +200,20 @@ export default function JobDetailProvider() {
 
       <div className="grid items-start gap-5 lg:grid-cols-[1fr_280px]">
         <div className="space-y-5">
-          {/* ---------- OPEN + no contact: the primary action ---------- */}
           {isOpen && !contact && (
             <section className="anim-up rounded-2xl border border-line bg-card p-6 text-center shadow-sm" style={{ animationDelay: "0.16s" }}>
-              <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-amber-100 text-amber-600">
-                <PhoneCall className="h-5 w-5" />
-              </span>
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-amber-100 text-amber-600"><PhoneCall className="h-5 w-5" /></span>
               <h2 className="mt-3 font-brand text-lg font-bold tracking-tight text-ink">Interested in this job?</h2>
               <p className="mx-auto mt-1 max-w-sm text-[13px] font-medium leading-relaxed text-mist">
                 Express interest to reveal the homeowner's phone number and call them directly.
               </p>
-              <button
-                disabled={busy}
-                onClick={handleExpressInterest}
-                className="btn-press mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 py-4 text-sm font-bold text-pine-900 shadow-md hover:bg-amber-400 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-8"
-              >
+              <button disabled={busy} onClick={handleExpressInterest} className="btn-press mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 py-4 text-sm font-bold text-pine-900 shadow-md hover:bg-amber-400 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-8">
                 {busy ? <Spinner /> : <PhoneCall className="h-4 w-4" />}
                 {busy ? "Revealing contact…" : "Express interest — reveal phone number"}
               </button>
             </section>
           )}
 
-          {/* ---------- contact revealed ---------- */}
           {contact && (
             <section className="anim-scale overflow-hidden rounded-2xl border border-emerald-200 bg-card shadow-lg" role="status">
               <div className="flex items-center gap-2 border-b border-emerald-100 bg-emerald-50 px-5 py-3">
@@ -255,18 +229,10 @@ export default function JobDetailProvider() {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
-                  <a
-                    href={`tel:${contact.phone}`}
-                    className="btn-press inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-pine py-3.5 text-sm font-bold text-cream shadow-md hover:bg-pine-700 hover:shadow-xl"
-                  >
+                  <a href={`tel:${contact.phone}`} className="btn-press inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-pine py-3.5 text-sm font-bold text-cream shadow-md hover:bg-pine-700 hover:shadow-xl">
                     <PhoneCall className="h-4 w-4 text-amber-400" /> {contact.phone}
                   </a>
-                  <button
-                    onClick={copyPhone}
-                    className={`btn-press inline-flex items-center justify-center gap-2 rounded-2xl border px-5 py-3.5 text-sm font-bold transition-colors ${
-                      copied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-line text-pine hover:border-pine/40 hover:bg-pine-50"
-                    }`}
-                  >
+                  <button onClick={copyPhone} className={`btn-press inline-flex items-center justify-center gap-2 rounded-2xl border px-5 py-3.5 text-sm font-bold transition-colors ${copied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-line text-pine hover:border-pine/40 hover:bg-pine-50"}`}>
                     {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {copied ? "Copied" : "Copy"}
                   </button>
@@ -279,7 +245,6 @@ export default function JobDetailProvider() {
             </section>
           )}
 
-          {/* ---------- no longer open ---------- */}
           {!isOpen && !contact && (
             <section className="anim-up rounded-2xl border border-line bg-card p-6 text-center shadow-sm" style={{ animationDelay: "0.16s" }}>
               <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-pine-50 text-pine-700">
@@ -298,16 +263,13 @@ export default function JobDetailProvider() {
           )}
         </div>
 
-        {/* ---------- right rail: how it works ---------- */}
         <aside className="anim-up space-y-4 lg:sticky lg:top-24" style={{ animationDelay: "0.22s" }}>
           <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-mist">How winning works</p>
             <ol className="mt-4 space-y-4">
               {HOW_IT_WORKS.map((s, i) => (
                 <li key={s.title} className="relative flex gap-3">
-                  {i < HOW_IT_WORKS.length - 1 && (
-                    <span className="absolute left-[15px] top-9 h-[calc(100%-14px)] w-px bg-line" />
-                  )}
+                  {i < HOW_IT_WORKS.length - 1 && <span className="absolute left-[15px] top-9 h-[calc(100%-14px)] w-px bg-line" />}
                   <span className={`relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-full ${i === 0 && isOpen && !contact ? "pulse-soft bg-amber-500 text-pine-900" : "bg-pine-50 text-pine-700"}`}>
                     <s.icon className="h-3.5 w-3.5" />
                   </span>

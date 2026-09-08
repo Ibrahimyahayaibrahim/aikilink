@@ -16,12 +16,16 @@ const providerProfileSchema = new mongoose.Schema(
         ref: "Category",
       },
     ],
-    coverageAreas: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Area",
-      },
-    ],
+    state: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    lga: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     idDocumentUrl: {
       type: String,
       default: null,
@@ -50,9 +54,9 @@ const providerProfileSchema = new mongoose.Schema(
   { toJSON: baseToJSON() }
 );
 
-// A job matches this provider if job.category is in categories AND job.area is in coverageAreas
+// A job matches this provider if job.category is in categories AND job.state/lga equal provider state/lga
 // (Section 3.13 matching rule)
 providerProfileSchema.index({ categories: 1 });
-providerProfileSchema.index({ coverageAreas: 1 });
+providerProfileSchema.index({ state: 1, lga: 1 });
 
 export default mongoose.model("ProviderProfile", providerProfileSchema);

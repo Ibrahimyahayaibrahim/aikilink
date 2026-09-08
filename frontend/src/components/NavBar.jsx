@@ -10,25 +10,23 @@ import Logo from "./Logo";
 import Avatar from "./Avatar";
 
 /* ================================================================
-   ROUTES — single source of truth. Match against your App.jsx.
+   ROUTES — verified against frontend/src/App.jsx (commit 80a5ada).
    ================================================================ */
 const ROUTES = {
   login: "/login",
   register: "/register",
   homeownerJobs: "/homeowner",
-  postJob: "/homeowner/post", 
-  providerFeed: "/provider",
-  providerWork: "/provider/work",
+  postJob: "/homeowner/post",
+  providerFeed: "/provider",       // Fixed: matches your ProviderDashboard
+  providerWork: "/provider/work",  // Fixed: matches your ProviderMyWork
   providerProfile: "/provider/profile",
 };
 
 /* ================================================================
-   NOTIFICATIONS — backend contract (ensure your API matches):
-     GET   /notifications           → array of { _id, type, title, body, createdAt, read }
+   NOTIFICATIONS — backend contract:
+     GET   /notifications           → [ { _id, type, title, body, link, createdAt, read } ]
      PATCH /notifications/read      → mark ALL as read
      PATCH /notifications/:id/read  → mark ONE as read (optional)
-   Field names are tolerated: type|kind, body|message|text,
-   createdAt|created_at, read|isRead.
    ================================================================ */
 
 function timeAgo(dateStr) {
@@ -58,6 +56,7 @@ const normalize = (n) => ({
   kind: kindOf(n.type || n.kind || n.title),
   title: n.title || "Notification",
   body: n.body || n.message || n.text || "",
+  link: n.link || "",
   time: timeAgo(n.createdAt || n.created_at),
   unread: !(n.read ?? n.isRead ?? false),
 });
@@ -69,11 +68,10 @@ const emit = () => listeners.forEach((fn) => fn());
 
 async function fetchNotifications(token) {
   try {
-    // Adding the timestamp forces the browser to bypass its cache
-    const data = await api.get(`/notifications?t=${Date.now()}`, token);
+    const data = await api.get("/notifications", token);
     cache = { list: (Array.isArray(data) ? data : data?.notifications || []).map(normalize), loaded: true };
   } catch (err) {
-    cache = { ...cache, loaded: true }; 
+    cache = { ...cache, loaded: true }; // endpoint missing — fail quietly, bell just stays empty
   }
   emit();
 }
@@ -179,8 +177,8 @@ function NotifPanel({ notifications, loaded, onMarkAll, onOpen }) {
             return (
               <button
                 key={n.id}
-                onClick={() => onOpen(n.id)}
-                className={`flex w-full gap-3 rounded-xl p-3 text-left transition-colors hover:bg-cream ${n.unread ? "bg-amber-50/70" : ""}`}
+                onClick={() => onOpen(n.id, n.link)}
+                className={`flex w-full gap-3 rounded-xl p-3 text-left transition-colors hover:bg-cream ${n.unread ? "bg-amber-50/70" : ""} ${n.link ? "cursor-pointer" : "cursor-default"}`}
               >
                 <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${K.cls}`}>
                   <Icon className="h-4 w-4" />
@@ -209,7 +207,7 @@ function NotifPanel({ notifications, loaded, onMarkAll, onOpen }) {
 }
 
 /* ================================================================
-   NavBar — same layout, links and mobile menu as before.
+   NavBar
    ================================================================ */
 export default function NavBar() {
   const { isAuthenticated, user, logout } = useAuth();
@@ -332,8 +330,9 @@ export default function NavBar() {
                 notifications={notifications}
                 loaded={loaded}
                 onMarkAll={() => markAllRead(token)}
-                onOpen={(id) => {
+                onOpen={(id, link) => {
                   markOneRead(token, id);
+                  if (link) navigate(link);
                   setNotifOpen(false);
                 }}
               />
@@ -386,7 +385,8 @@ export default function NavBar() {
 }
 
 /* ================================================================
-   MobileTabBar — now driven by the same live notification store.
+   MobileTabBar — optional. Your App.jsx doesn't render it yet;
+   add <MobileTabBar /> after <Footer /> if you want the bottom bar.
    ================================================================ */
 function Tab({ to, icon: Icon, label }) {
   return (
@@ -429,7 +429,11 @@ export function MobileTabBar() {
               notifications={notifications}
               loaded={loaded}
               onMarkAll={() => markAllRead(token)}
-              onOpen={(id) => markOneRead(token, id)}
+              onOpen={(id, link) => {
+                markOneRead(token, id);
+                if (link) navigate(link);
+                setAlerts(false);
+              }}
             />
           </div>
         </>

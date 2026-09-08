@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowLeft, Check, Cog, Droplets, Hammer, LayoutGrid, MapPin, PaintRoller, PlugZap, Send, Wrench, Zap } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, ChevronDown, Cog, Droplets, Hammer, LayoutGrid, MapPin, PaintRoller, PlugZap, Search, Send, Wrench, Zap } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useLookups } from "../api/useLookups";
 import { api } from "../api/client";
 import Spinner from "../components/Spinner";
 
-/* Keep in sync with the ROUTES map in NavBar.jsx */
+import { nigerianLocations } from "../data/nigerianLocations";
+
 const ROUTES = { back: "/homeowner/jobs" };
 
 const DESC_MAX = 600;
@@ -37,13 +38,51 @@ const inputBase =
 const inputOk = "border-line focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25";
 const inputBad = "border-rose-400 ring-2 ring-rose-200";
 
+// Shared combobox panel rendered identically by all three dropdowns
+function ComboPanel({ search, setSearch, placeholder, filtered, onSelect, renderItem }) {
+  return (
+    <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-2xl border border-line bg-white shadow-xl">
+      <div className="border-b border-line p-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mist" />
+          <input
+            autoFocus
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={placeholder}
+            className="w-full rounded-xl border border-line bg-cream pl-10 pr-4 py-2 text-sm text-ink placeholder:text-mist/60 focus:outline-none focus:ring-2 focus:ring-amber-500/25"
+          />
+        </div>
+      </div>
+      <ul className="max-h-60 overflow-y-auto p-1">
+        {filtered.length === 0 ? (
+          <li className="px-3 py-3 text-center text-xs font-semibold text-mist/60">No results found.</li>
+        ) : (
+          filtered.map((item, idx) => renderItem(item, idx))
+        )}
+      </ul>
+    </div>
+  );
+}
+
 export default function PostJobPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
-  const { categories, areas, loading: lookupsLoading } = useLookups();
+  const { categories, loading: lookupsLoading } = useLookups();
 
   const [categoryId, setCategoryId] = useState("");
-  const [areaId, setAreaId] = useState("");
+  const [categorySearch, setCategorySearch] = useState("");
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+
+  const [selectedState, setSelectedState] = useState("");
+  const [stateSearch, setStateSearch] = useState("");
+  const [isStateOpen, setIsStateOpen] = useState(false);
+
+  const [lga, setLga] = useState("");
+  const [lgaSearch, setLgaSearch] = useState("");
+  const [isLgaOpen, setIsLgaOpen] = useState(false);
+
   const [description, setDescription] = useState("");
   const [urgency, setUrgency] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -53,10 +92,32 @@ export default function PostJobPage() {
 
   const clearError = (key) => setErrors((e) => (e[key] ? { ...e, [key]: "" } : e));
 
+  // Cascading logic
+  const allStates = Object.keys(nigerianLocations);
+  const availableLGAs = selectedState ? nigerianLocations[selectedState] : [];
+
+  useEffect(() => {
+    setLga("");
+  }, [selectedState]);
+
+  // Filtering
+  const filteredCategories = categories.filter((c) =>
+    c.name.toLowerCase().includes(categorySearch.toLowerCase())
+  );
+
+  const filteredStates = allStates.filter((s) =>
+    s.toLowerCase().includes(stateSearch.toLowerCase())
+  );
+
+  const filteredLGAs = availableLGAs.filter((l) =>
+    l.toLowerCase().includes(lgaSearch.toLowerCase())
+  );
+
   const validate = () => {
     const next = {};
     if (!categoryId) next.categoryId = "Choose the trade this job needs.";
-    if (!areaId) next.areaId = "Pick an area so nearby providers see it.";
+    if (!selectedState) next.selectedState = "Pick a state.";
+    if (!lga) next.lga = "Pick a local government area.";
     if (description.trim().length < 5) next.description = "Add a little more detail — at least 5 characters.";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -68,10 +129,9 @@ export default function PostJobPage() {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      /* Payload + flow identical to the original — backend untouched. */
       const { job, matchingProviderCount } = await api.post(
         "/jobs",
-        { categoryId, areaId, description: description.trim(), urgency },
+        { categoryId, state: selectedState, lga, description: description.trim(), urgency },
         token
       );
       setMatchInfo(matchingProviderCount);
@@ -91,7 +151,6 @@ export default function PostJobPage() {
   }
 
   const selectedCat = categories.find((c) => c._id === categoryId);
-  const selectedArea = areas.find((a) => a._id === areaId);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -107,7 +166,6 @@ export default function PostJobPage() {
       </div>
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1fr_330px]">
-        {/* ---------- form ---------- */}
         <form onSubmit={handleSubmit} noValidate className="anim-up space-y-7 rounded-2xl border border-line bg-card p-5 shadow-sm md:p-8" style={{ animationDelay: "0.08s" }}>
           {error && (
             <div className="anim-scale flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3" role="alert">
@@ -124,7 +182,7 @@ export default function PostJobPage() {
             </div>
           )}
 
-          {/* 01 — trade */}
+          {/* 01 — trade (combobox) */}
           <div>
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-mist">
@@ -136,61 +194,178 @@ export default function PostJobPage() {
                 </span>
               )}
             </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {categories.map((c) => {
-                const active = categoryId === c._id;
-                return (
-                  <button
-                    key={c._id}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={active}
-                    tabIndex={0}
-                    onClick={() => { setCategoryId(c._id); clearError("categoryId"); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCategoryId(c._id); clearError("categoryId"); }
-                    }}
-                    className={`btn-press group flex items-center justify-center gap-2 rounded-2xl border px-2 py-3.5 text-xs font-bold transition-all duration-200 ${
-                      active
-                        ? "border-pine bg-pine text-cream shadow-md"
-                        : errors.categoryId
-                          ? "border-rose-300 bg-rose-50/40 text-mist hover:border-rose-400"
-                          : "border-line bg-cream text-mist hover:-translate-y-0.5 hover:border-pine/40 hover:text-pine"
-                    }`}
-                  >
-                    <TradeIcon name={c.name} className={`h-4 w-4 transition-colors ${active ? "text-amber-400" : ""}`} />
-                    {c.name}
-                    {active && <Check className="anim-scale h-3.5 w-3.5 text-amber-400" />}
-                  </button>
-                );
-              })}
+            <div className="relative mt-2.5">
+              <button
+                type="button"
+                onClick={() => { setIsCategoryOpen((v) => !v); if (!isCategoryOpen) setCategorySearch(""); }}
+                className={`${inputBase} flex items-center gap-2 text-left ${errors.categoryId ? inputBad : inputOk}`}
+              >
+                {selectedCat ? (
+                  <>
+                    <TradeIcon name={selectedCat.name} className="h-4 w-4 shrink-0 text-pine-700" />
+                    <span className="flex-1 truncate text-sm font-bold text-ink">{selectedCat.name}</span>
+                  </>
+                ) : (
+                  <span className="flex-1 text-sm font-medium text-mist/60">Search or select a service...</span>
+                )}
+                <ChevronDown className={`h-4 w-4 shrink-0 text-mist transition-transform duration-200 ${isCategoryOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isCategoryOpen && (
+                <ComboPanel
+                  search={categorySearch}
+                  setSearch={setCategorySearch}
+                  placeholder="Search categories..."
+                  filtered={filteredCategories}
+                  onSelect={(c) => {
+                    setCategoryId(c._id);
+                    setIsCategoryOpen(false);
+                    setCategorySearch("");
+                    clearError("categoryId");
+                  }}
+                  renderItem={(c) => (
+                    <li
+                      key={c._id}
+                      onClick={() => {
+                        setCategoryId(c._id);
+                        setIsCategoryOpen(false);
+                        setCategorySearch("");
+                        clearError("categoryId");
+                      }}
+                      className={`flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors duration-200 ${
+                        categoryId === c._id
+                          ? "bg-amber-50 font-bold text-amber-700"
+                          : "text-ink hover:bg-pine-50 hover:text-pine-800"
+                      }`}
+                    >
+                      <TradeIcon name={c.name} className={`h-4 w-4 shrink-0 ${categoryId === c._id ? "text-amber-600" : "text-pine-600"}`} />
+                      <span className="flex-1 truncate">{c.name}</span>
+                      {categoryId === c._id && <Check className="h-4 w-4 shrink-0 text-amber-500" />}
+                    </li>
+                  )}
+                />
+              )}
             </div>
             <FieldError message={errors.categoryId} />
           </div>
 
-          {/* 02 — area */}
-          <div>
-            <label htmlFor="area" className="text-[11px] font-bold uppercase tracking-[0.14em] text-mist">
-              <span className="mr-1.5 text-amber-600">02</span> Area
-            </label>
-            <div className="relative mt-2.5">
-              <MapPin className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${errors.areaId ? "text-rose-500" : "text-pine-600/70"}`} />
-              <select
-                id="area"
-                value={areaId}
-                onChange={(e) => { setAreaId(e.target.value); clearError("areaId"); }}
-                className={`${inputBase} cursor-pointer appearance-none pl-11 pr-10 ${errors.areaId ? inputBad : inputOk} ${areaId ? "" : "text-mist/60"}`}
-              >
-                <option value="" disabled>Choose an area…</option>
-                {areas.map((a) => (
-                  <option key={a._id} value={a._id}>{a.name}, {a.city}</option>
-                ))}
-              </select>
-              <svg className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-mist" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+          {/* 02 — location (cascading comboboxes) */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* State combobox */}
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-mist">
+                <span className="mr-1.5 text-amber-600">02</span> State
+              </span>
+              <div className="relative mt-2.5">
+                <MapPin className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${errors.selectedState ? "text-rose-500" : "text-pine-600/70"}`} />
+                <button
+                  type="button"
+                  onClick={() => { if (isStateOpen) { setStateSearch(""); setIsStateOpen(false); } else { setStateSearch(""); setIsStateOpen(true); } }}
+                  className={`${inputBase} flex items-center gap-2 pl-11 text-left ${errors.selectedState ? inputBad : inputOk} ${selectedState ? "text-ink" : "text-mist/60"}`}
+                >
+                  <span className="flex-1 truncate text-sm font-semibold">
+                    {selectedState || "Choose a state…"}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-mist transition-transform duration-200 ${isStateOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isStateOpen && (
+                  <ComboPanel
+                    search={stateSearch}
+                    setSearch={setStateSearch}
+                    placeholder="Search states..."
+                    filtered={filteredStates}
+                    onSelect={(s) => {
+                      setSelectedState(s);
+                      setLga("");
+                      setStateSearch("");
+                      setIsStateOpen(false);
+                      clearError("selectedState");
+                    }}
+                    renderItem={(s) => (
+                      <li
+                        key={s}
+                        onClick={() => {
+                          setSelectedState(s);
+                          setLga("");
+                          setStateSearch("");
+                          setIsStateOpen(false);
+                          clearError("selectedState");
+                        }}
+                        className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-200 ${
+                          selectedState === s
+                            ? "bg-amber-50 font-bold text-amber-700"
+                            : "text-ink hover:bg-pine-50 hover:text-pine-800"
+                        }`}
+                      >
+                        {s}
+                        {selectedState === s && <Check className="float-right h-4 w-4 text-amber-500" />}
+                      </li>
+                    )}
+                  />
+                )}
+              </div>
+              <FieldError message={errors.selectedState} />
             </div>
-            <FieldError message={errors.areaId} />
+
+            {/* LGA combobox */}
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-mist">
+                LGA
+              </span>
+              <div className="relative mt-2.5">
+                <MapPin className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${errors.lga ? "text-rose-500" : "text-pine-600/70"}`} />
+                <button
+                  type="button"
+                  disabled={!selectedState}
+                  onClick={() => {
+                    if (!selectedState) return;
+                    if (isLgaOpen) { setLgaSearch(""); setIsLgaOpen(false); } else { setLgaSearch(""); setIsLgaOpen(true); }
+                  }}
+                  className={`${inputBase} flex items-center gap-2 pl-11 text-left ${errors.lga ? inputBad : inputOk} ${lga ? "text-ink" : "text-mist/60"} ${!selectedState ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
+                >
+                  <span className="flex-1 truncate text-sm font-semibold">
+                    {lga || (selectedState ? "Select an LGA…" : "Select a state first")}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-mist transition-transform duration-200 ${isLgaOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {selectedState && isLgaOpen && (
+                  <ComboPanel
+                    search={lgaSearch}
+                    setSearch={setLgaSearch}
+                    placeholder="Search LGAs..."
+                    filtered={filteredLGAs}
+                    onSelect={(l) => {
+                      setLga(l);
+                      setLgaSearch("");
+                      setIsLgaOpen(false);
+                      clearError("lga");
+                    }}
+                    renderItem={(l) => (
+                      <li
+                        key={l}
+                        onClick={() => {
+                          setLga(l);
+                          setLgaSearch("");
+                          setIsLgaOpen(false);
+                          clearError("lga");
+                        }}
+                        className={`cursor-pointer rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-200 ${
+                          lga === l
+                            ? "bg-amber-50 font-bold text-amber-700"
+                            : "text-ink hover:bg-pine-50 hover:text-pine-800"
+                        }`}
+                      >
+                        {l}
+                        {lga === l && <Check className="float-right h-4 w-4 text-amber-500" />}
+                      </li>
+                    )}
+                  />
+                )}
+              </div>
+              <FieldError message={errors.lga} />
+            </div>
           </div>
 
           {/* 03 — description */}
@@ -281,7 +456,7 @@ export default function PostJobPage() {
               </p>
               <p className="flex items-center gap-1.5 text-xs font-medium text-mist">
                 <MapPin className="h-3.5 w-3.5 text-pine-600/70" />
-                {selectedArea ? `${selectedArea.name}, ${selectedArea.city}` : "Area"}
+                {selectedState && lga ? `${lga}, ${selectedState}` : "Location"}
               </p>
             </div>
           </div>

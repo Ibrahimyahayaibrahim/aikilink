@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import NavBar from "./components/NavBar";
 import Footer from "./components/Footer";
 
+import ScrollToTop from "./components/ScrollToTop";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -19,8 +20,10 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ScrollToTop />
         <div className="app-shell">
           <NavBar />
+
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />

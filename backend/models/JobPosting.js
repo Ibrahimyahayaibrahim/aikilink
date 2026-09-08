@@ -15,10 +15,15 @@ const jobPostingSchema = new mongoose.Schema(
       ref: "Category",
       required: true,
     },
-    areaId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Area",
-      required: true,
+    state: {
+      type: String,
+      required: [true, "State is required"],
+      trim: true,
+    },
+    lga: {
+      type: String,
+      required: [true, "LGA is required"],
+      trim: true,
     },
     description: {
       type: String,
@@ -50,7 +55,7 @@ const jobPostingSchema = new mongoose.Schema(
   }
 );
 
-// Supports the matching algorithm (Section 3.13): filtering Open jobs by category/area
-jobPostingSchema.index({ status: 1, categoryId: 1, areaId: 1 });
+// Supports the matching algorithm (Section 3.13): filtering Open jobs by category/state/lga
+jobPostingSchema.index({ status: 1, categoryId: 1, state: 1, lga: 1 });
 
 export default mongoose.model("JobPosting", jobPostingSchema);

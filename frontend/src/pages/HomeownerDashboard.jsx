@@ -10,9 +10,6 @@ import { useLookups } from "../api/useLookups";
 import JobCard from "../components/JobCard";
 import Spinner from "../components/Spinner";
 
-/* ================================================================
-   ROUTES — keep in sync with the ROUTES map in your NavBar.jsx
-   ================================================================ */
 const ROUTES = {
   postJob: "/homeowner/post",
   jobDetail: (id) => `/homeowner/jobs/${id}`,
@@ -26,7 +23,13 @@ const titleCase = (s) =>
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 
-/* Trade icon picked from the category name — falls back to a wrench. */
+/* Safe location display — null-guarded. */
+function jobLocation(job) {
+  if (!job) return null;
+  if (job.lga && job.state) return `${job.lga}, ${job.state}`;
+  return null;
+}
+
 function TradeIcon({ name, className }) {
   const n = String(name || "").toLowerCase();
   if (n.includes("electric")) return <Zap className={className} />;
@@ -39,7 +42,6 @@ function TradeIcon({ name, className }) {
   return <Wrench className={className} />;
 }
 
-/* Lightweight count-up for the stat tiles. */
 function CountUp({ to, prefix = "" }) {
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -74,7 +76,6 @@ const TICKER = [
   "Rate your artisan after the job — it keeps the marketplace honest",
 ];
 
-/* Hand-drawn empty-state illustration — blueprint work order motif. */
 function EmptyIllustration() {
   return (
     <svg viewBox="0 0 220 150" className="mx-auto h-36 w-auto" fill="none" aria-hidden="true">
@@ -113,7 +114,6 @@ export default function HomeownerDashboard() {
     let cancelled = false;
     (async () => {
       try {
-        /* ⚠ Align with backend/routes/jobRoutes.js — try "/jobs/my" if this 404s. */
         const data = await api.get("/jobs/mine", token);
         if (!cancelled) setJobs(Array.isArray(data) ? data : data?.jobs || []);
       } catch (err) {
@@ -122,9 +122,7 @@ export default function HomeownerDashboard() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [token]);
 
   const filtered = useMemo(() => {
@@ -133,7 +131,7 @@ export default function HomeownerDashboard() {
       const okCat = !activeCat || j.categoryId?._id === activeCat;
       const okQ =
         !ql ||
-        [j.title, j.description, j.categoryId?.name, j.areaId?.name, j.areaId?.city]
+        [j.title, j.description, j.categoryId?.name, j.state, j.lga]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -189,7 +187,7 @@ export default function HomeownerDashboard() {
             <span className="font-bold text-amber-400">
               {stats.active} active job{stats.active === 1 ? "" : "s"}
             </span>{" "}
-            {stats.active === 1 ? "running" : "running"} and{" "}
+            running and{" "}
             <span className="font-bold text-amber-400">{stats.quotes}</span> quote{stats.quotes === 1 ? "" : "s"} waiting for you.
           </p>
 
@@ -300,7 +298,6 @@ export default function HomeownerDashboard() {
             <p className="mt-1 text-xs font-medium text-rose-500">Check that your backend is running, then refresh.</p>
           </div>
         ) : jobs.length === 0 ? (
-          /* ---------- empty state ---------- */
           <div className="anim-up relative overflow-hidden rounded-2xl border border-dashed border-pine/30 bg-card px-6 py-14 text-center" style={{ animationDelay: "0.15s" }}>
             <span className="pointer-events-none absolute -left-10 -top-10 h-32 w-32 rounded-full bg-pine-50" />
             <span className="pointer-events-none absolute -bottom-12 -right-8 h-36 w-36 rounded-full bg-amber-50" />
@@ -324,7 +321,6 @@ export default function HomeownerDashboard() {
             </div>
           </div>
         ) : filtered.length === 0 ? (
-          /* ---------- no matches ---------- */
           <div className="anim-up rounded-2xl border border-line bg-card px-6 py-12 text-center">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-pine-50 text-pine-700">
               <Search className="h-5 w-5" />

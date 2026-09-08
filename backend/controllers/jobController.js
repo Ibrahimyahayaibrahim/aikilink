@@ -30,34 +30,38 @@ async function getProviderProfileOrFail(userId) {
 
 // POST /api/jobs  (FR6) — Homeowner only
 export const createJob = async (req, res) => {
-  const { categoryId, areaId, description, urgency } = req.body;
-  if (!categoryId || !areaId || !description) {
-    return res.status(400).json({ message: "categoryId, areaId, and description are required" });
+  try {
+    const { categoryId, state, lga, description, urgency } = req.body;
+
+    // 1. Validate the new string fields
+    if (!categoryId || !state || !lga || !description) {
+      return res.status(400).json({ message: "categoryId, state, lga, and description are required" });
+    }
+
+    const homeownerProfile = await getHomeownerProfileOrFail(req.user.id);
+
+    // 2. Save the job with text instead of ObjectIds
+    const job = await JobPosting.create({
+      homeownerId: homeownerProfile._id,
+      categoryId,
+      state: state.trim(),
+      lga: lga.trim(),
+      description: description.trim(),
+      urgency: !!urgency,
+      status: "Open",
+    });
+
+    // 3. Count providers matching the exact state and LGA (case-insensitive)
+    const matchingProviderCount = await ProviderProfile.countDocuments({
+      categories: categoryId,
+      state: { $regex: new RegExp(`^${state.trim()}$`, "i") },
+      lga: { $regex: new RegExp(`^${lga.trim()}$`, "i") }
+    });
+
+    res.status(201).json({ job, matchingProviderCount });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
-  if (!isValidObjectId(categoryId) || !isValidObjectId(areaId)) {
-    return res.status(400).json({ message: "categoryId and areaId must be valid ids" });
-  }
-  if (typeof description !== "string" || description.trim().length < 5 || description.length > 2000) {
-    return res.status(400).json({ message: "description must be between 5 and 2000 characters" });
-  }
-
-  const homeownerProfile = await getHomeownerProfileOrFail(req.user.id);
-
-  const job = await JobPosting.create({
-    homeownerId: homeownerProfile._id,
-    categoryId,
-    areaId,
-    description: description.trim(),
-    urgency: !!urgency,
-    status: "Open",
-  });
-
-  const matchingProviderCount = await ProviderProfile.countDocuments({
-    categories: categoryId,
-    coverageAreas: areaId,
-  });
-
-  res.status(201).json({ job, matchingProviderCount });
 };
 
 // GET /api/jobs  (FR8 — pull) — Provider only. 
@@ -75,7 +79,7 @@ export const searchJobs = async (req, res) => {
   }
 
   const jobs = await JobPosting.find(filter)
-    .populate("categoryId areaId")
+    .populate("categoryId")
     .sort({ created_at: -1 })
     .limit(MAX_PAGE_SIZE);
   res.json(jobs);
@@ -90,7 +94,7 @@ export const getMyMatches = async (req, res) => {
     categoryId: { $in: providerProfile.categories },
     areaId: { $in: providerProfile.coverageAreas },
   })
-    .populate("categoryId areaId")
+    .populate("categoryId")
     .sort({ created_at: -1 })
     .limit(MAX_PAGE_SIZE);
 
@@ -101,7 +105,7 @@ export const getMyMatches = async (req, res) => {
 export const getMyJobs = async (req, res) => {
   const homeownerProfile = await getHomeownerProfileOrFail(req.user.id);
   const jobs = await JobPosting.find({ homeownerId: homeownerProfile._id })
-    .populate("categoryId areaId claimedBy")
+    .populate("categoryId claimedBy")
     .sort({ created_at: -1 })
     .limit(MAX_PAGE_SIZE);
   res.json(jobs);
@@ -111,7 +115,7 @@ export const getMyJobs = async (req, res) => {
 export const getMyAssignedJobs = async (req, res) => {
   const providerProfile = await getProviderProfileOrFail(req.user.id);
   const jobs = await JobPosting.find({ claimedBy: providerProfile._id })
-    .populate("categoryId areaId")
+    .populate("categoryId")
     .populate({ path: "homeownerId", populate: { path: "userId", select: "name" } })
     .sort({ claimedAt: -1 })
     .limit(MAX_PAGE_SIZE);
@@ -120,21 +124,22 @@ export const getMyAssignedJobs = async (req, res) => {
 
 // GET /api/jobs/:id 
 export const getJobById = async (req, res) => {
-  const job = await JobPosting.findById(req.params.id).populate("categoryId areaId claimedBy");
+  const job = await JobPosting.findById(req.params.id).populate("categoryId claimedBy");
   if (!job) return res.status(404).json({ message: "Job not found" });
   res.json(job);
 };
 
 // POST /api/jobs/:id/interest  (FR9) — Provider only
+// POST /api/jobs/:id/interest  (FR9) — Provider only
 export const expressInterest = async (req, res) => {
-  const job = await JobPosting.findById(req.params.id);
+  const job = await JobPosting.findById(req.params.id).populate("categoryId");
   if (!job) return res.status(404).json({ message: "Job not found" });
   if (job.status !== "Open") {
     return res.status(409).json({ message: "This job is no longer open" });
   }
 
   const providerProfile = await getProviderProfileOrFail(req.user.id);
-
+  
   await JobInterestLog.findOneAndUpdate(
     { jobId: job._id, providerId: providerProfile._id },
     { $setOnInsert: { timestamp: new Date() } },
@@ -142,25 +147,20 @@ export const expressInterest = async (req, res) => {
   );
 
   const homeownerProfile = await HomeownerProfile.findById(job.homeownerId).populate({
-  path: "userId",
-  select: "name phone _id", // Ensure _id is selected
-});
-
-if (homeownerProfile && homeownerProfile.userId) {
-  await Notification.create({
-    recipient: homeownerProfile.userId._id, // True User ID
-    type: "quote", 
-    title: "New Artisan Interest",
-    body: `${req.user.name} is interested in your job. Check their profile!`,
+    path: "userId",
+    select: "name phone _id",
   });
-}
-  // Create notification for the homeowner
+
+  const categoryName = job.categoryId?.name || "posted";
+  
+  // Notify the homeowner — single creation (the old version fired this twice)
   if (homeownerProfile && homeownerProfile.userId) {
     await Notification.create({
-      recipient: homeownerProfile.userId._id, 
-      type: "quote", 
+      recipient: homeownerProfile.userId._id,
+      type: "quote",
       title: "New Artisan Interest",
-      body: `${req.user.name} is interested in your job. Check their profile!`,
+      body: `An artisan is interested in your ${categoryName} job.`,
+      link: "/homeowner",
     });
   }
 
@@ -172,7 +172,6 @@ if (homeownerProfile && homeownerProfile.userId) {
     },
   });
 };
-
 // GET /api/jobs/:id/interested  — Homeowner only
 export const getInterestedProviders = async (req, res) => {
   const job = await JobPosting.findById(req.params.id);
