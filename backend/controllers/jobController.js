@@ -29,6 +29,7 @@ async function getProviderProfileOrFail(userId) {
 }
 
 // POST /api/jobs  (FR6) — Homeowner only
+// POST /api/jobs  (FR6) — Homeowner only
 export const createJob = async (req, res) => {
   try {
     const { categoryId, state, lga, description, urgency } = req.body;
@@ -51,31 +52,66 @@ export const createJob = async (req, res) => {
       status: "Open",
     });
 
-    // 3. Count providers matching the exact state and LGA (case-insensitive)
-    const matchingProviderCount = await ProviderProfile.countDocuments({
+    // 3. Find providers matching the exact state and LGA (case-insensitive)
+    const matchingProviders = await ProviderProfile.find({
       categories: categoryId,
       state: { $regex: new RegExp(`^${state.trim()}$`, "i") },
       lga: { $regex: new RegExp(`^${lga.trim()}$`, "i") }
     });
 
+    const matchingProviderCount = matchingProviders.length;
+
+    // 4. Create and Emit Notifications
+    if (matchingProviderCount > 0) {
+      const notifications = matchingProviders.map((provider) => ({
+        // Map to your schema's exact required fields
+        recipient: provider.userId,
+        title: "New Job Alert",
+        body: `A new job is available in ${lga.trim()}, ${state.trim()}`,
+        
+        // Include these if your schema supports them
+        type: "new_job",
+        link: `/provider/jobs/${job._id}`,
+      }));
+
+      // Save to database so they persist if the user is offline
+      await Notification.insertMany(notifications);
+
+      // Grab the global Socket.io instance and emit to online users
+      const io = req.app.get("io");
+      if (io) {
+        notifications.forEach((notif) => {
+          // Send only to the specific artisan's private room
+          // Ensure we emit to the correct ID string
+          io.to(notif.recipient.toString()).emit("notification", notif);
+        });
+      }
+    }
+
     res.status(201).json({ job, matchingProviderCount });
   } catch (error) {
+    console.error("Error creating job:", error);
     res.status(500).json({ message: error.message });
   }
 };
 
 // GET /api/jobs  (FR8 — pull) — Provider only. 
+// GET /api/jobs  (FR8 — pull) — Provider only. 
 export const searchJobs = async (req, res) => {
-  const { category, area } = req.query;
+  const { category, state, lga } = req.query;
   const filter = { status: "Open" };
 
   if (category !== undefined) {
     if (!isValidObjectId(category)) return res.status(400).json({ message: "Invalid category filter" });
     filter.categoryId = category;
   }
-  if (area !== undefined) {
-    if (!isValidObjectId(area)) return res.status(400).json({ message: "Invalid area filter" });
-    filter.areaId = area;
+  
+  // NEW: Filter by state and lga instead of areaId
+  if (state !== undefined) {
+    filter.state = { $regex: new RegExp(`^${state.trim()}$`, "i") };
+  }
+  if (lga !== undefined) {
+    filter.lga = { $regex: new RegExp(`^${lga.trim()}$`, "i") };
   }
 
   const jobs = await JobPosting.find(filter)
@@ -86,13 +122,21 @@ export const searchJobs = async (req, res) => {
 };
 
 // GET /api/jobs/matches  (FR7 — push) — Provider only. 
+// GET /api/jobs/matches  (FR7 — push) — Provider only. 
 export const getMyMatches = async (req, res) => {
   const providerProfile = await getProviderProfileOrFail(req.user.id);
+
+  // NEW: Defensive check. If profile is incomplete, return 0 matches.
+  if (!providerProfile.state || !providerProfile.lga || !providerProfile.categories?.length) {
+    return res.json([]);
+  }
 
   const jobs = await JobPosting.find({
     status: "Open",
     categoryId: { $in: providerProfile.categories },
-    areaId: { $in: providerProfile.coverageAreas },
+    // NEW: Match the exact state and lga strings from the provider's profile
+    state: providerProfile.state,
+    lga: providerProfile.lga,
   })
     .populate("categoryId")
     .sort({ created_at: -1 })

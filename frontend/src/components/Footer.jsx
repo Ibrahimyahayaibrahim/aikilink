@@ -103,7 +103,7 @@ export default function Footer() {
                 </a>
               </li>
               <li className="inline-flex items-center gap-1.5 text-sm font-medium text-cream/65">
-                <MapPin className="h-4 w-4 text-amber-400/80" /> Ibadan, Oyo State
+                <MapPin className="h-4 w-4 text-amber-400/80" /> Gombe, Gombe State
               </li>
               <li className="inline-flex items-center gap-1.5 text-sm font-medium text-cream/65">
                 <Zap className="h-4 w-4 text-amber-400/80" /> Providers reply in ~15 min

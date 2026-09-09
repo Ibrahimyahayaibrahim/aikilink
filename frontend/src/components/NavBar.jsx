@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSocket } from "../context/SocketContext";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   Bell, Briefcase, CalendarDays, FileText, Hammer, Home, LogOut, Menu,
@@ -211,10 +212,41 @@ function NotifPanel({ notifications, loaded, onMarkAll, onOpen }) {
    ================================================================ */
 export default function NavBar() {
   const { isAuthenticated, user, logout } = useAuth();
-  const { token, notifications, loaded } = useNotifications();
+  const { socket } = useSocket(); // NEW: Grab the WebSocket
+  
+  // Rename the destructured notifications to initialNotifications
+  const { token, notifications: initialNotifications, loaded } = useNotifications();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+
+  // NEW: State specifically for real-time notifications
+  const [liveNotifications, setLiveNotifications] = useState([]);
+
+  // NEW: Listen for WebSocket events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewNotification = (notification) => {
+      // Force the new notification to be unread so it triggers the badge
+      const newNotif = { ...notification, unread: true };
+      
+      // Inject it at the very beginning of the live array
+      setLiveNotifications((prev) => [newNotif, ...prev]);
+    };
+
+    socket.on("notification", handleNewNotification);
+
+    return () => {
+      socket.off("notification", handleNewNotification);
+    };
+  }, [socket]);
+
+  // NEW: Combine both arrays. Live notifications appear first.
+  const allNotifications = [...liveNotifications, ...(initialNotifications || [])];
+  
+  // Calculate the total unread count across both arrays
+  const unread = allNotifications.filter((n) => n.unread).length;
 
   const handleLogout = () => {
     logout();
@@ -231,8 +263,6 @@ export default function NavBar() {
           { to: ROUTES.providerProfile, label: "My profile", icon: UserRound },
         ]
       : [{ to: ROUTES.homeownerJobs, label: "My jobs", icon: Briefcase }];
-
-  const unread = notifications.filter((n) => n.unread).length;
 
   const linkCls = ({ isActive }) =>
     `flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition-all duration-200 ${
@@ -327,13 +357,20 @@ export default function NavBar() {
             <button className="fixed inset-0 z-40 cursor-default" onClick={() => setNotifOpen(false)} aria-label="Close notifications" />
             <div className="anim-scale absolute right-4 top-full z-50 mt-2 hidden w-[360px] origin-top-right sm:block">
               <NotifPanel
-                notifications={notifications}
+                /* Pass the combined array to the panel */
+                notifications={allNotifications}
                 loaded={loaded}
-                onMarkAll={() => markAllRead(token)}
+                onMarkAll={() => {
+                  markAllRead(token);
+                  // Clear live notifications since they are now marked as read in the DB
+                  setLiveNotifications([]);
+                }}
                 onOpen={(id, link) => {
                   markOneRead(token, id);
                   if (link) navigate(link);
                   setNotifOpen(false);
+                  // Clear the live notification manually if they click it
+                  setLiveNotifications((prev) => prev.filter((n) => n._id !== id));
                 }}
               />
             </div>

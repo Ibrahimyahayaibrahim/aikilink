@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import jwt from "jsonwebtoken";
 import cors from "cors";
 import morgan from "morgan";
 import connectDB from "./config/db.js";
@@ -18,8 +19,10 @@ import jobRoutes from "./routes/jobRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import { categoryRouter, areaRouter } from "./routes/lookupRoutes.js";
 
-// Fail fast on weak/missing security-critical configuration rather than booting into an
-// insecure state (e.g. a short or default JWT secret that would make tokens forgeable).
+// Import HTTP and Socket.io
+import http from "http";
+import { Server } from "socket.io";
+
 function assertSecureConfig() {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 24) {
@@ -32,16 +35,59 @@ function assertSecureConfig() {
 
 const app = express();
 
-app.set("trust proxy", 1); // needed for correct client IPs behind a reverse proxy/load balancer
+// Wrap Express with a native HTTP server
+const server = http.createServer(app);
 
-// --- Security middleware (applied before any route handling) ---
+// Initialize Socket.io
+const allowedOrigins = (process.env.CLIENT_ORIGINS || "http://localhost:5173").split(",").map((s) => s.trim()).filter(Boolean);
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins.length ? allowedOrigins : "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true,
+  },
+});
+
+// Make io globally accessible to your controllers via req.app.get('io')
+app.set("io", io);
+
+// Socket.io Authentication Middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    return next(new Error("Authentication error: No token provided"));
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Ensure this matches how you structured your JWT payload (usually id or userId)
+    socket.userId = decoded.id; 
+    next();
+  } catch (err) {
+    return next(new Error("Authentication error: Invalid token"));
+  }
+});
+
+// Authenticated Socket Connection Logic
+io.on("connection", (socket) => {
+  console.log(`Client connected: ${socket.id} | User ID: ${socket.userId}`);
+
+  // Join a private room named exactly after the user's database ID
+  if (socket.userId) {
+    socket.join(socket.userId.toString());
+  }
+
+  socket.on("disconnect", () => {
+    console.log(`Client disconnected: ${socket.id}`);
+  });
+});
+
+app.set("trust proxy", 1); 
+
+// --- Security middleware ---
 app.use(secureHeaders);
 app.use(generalLimiter);
-
-const allowedOrigins = (process.env.CLIENT_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false, credentials: true }));
-
-app.use(express.json({ limit: "10kb" })); // caps request body size against payload-based DoS
+app.use(express.json({ limit: "10kb" })); 
 app.use(sanitizeMongo);
 app.use(preventParamPollution);
 
@@ -52,7 +98,7 @@ if (process.env.NODE_ENV !== "test") {
 // --- Health check ---
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
-// --- Routes (Table 3.14) ---
+// --- Routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/providers", providerRoutes);
@@ -70,12 +116,13 @@ const PORT = process.env.PORT || 5000;
 async function start() {
   assertSecureConfig();
   await connectDB();
-  app.listen(PORT, () => {
+  
+  // IMPORTANT: Server listens, binding both Express and Socket.io to the port
+  server.listen(PORT, () => {
     console.log(`[server] Listening on http://localhost:${PORT}`);
   });
 }
 
-// Only auto-start when run directly (not when imported by tests)
 if (process.argv[1] && process.argv[1].endsWith("server.js")) {
   start().catch((err) => {
     console.error("[server] Failed to start:", err.message);
@@ -83,4 +130,5 @@ if (process.argv[1] && process.argv[1].endsWith("server.js")) {
   });
 }
 
-export default app;
+// Export both for potential testing environments
+export { app, server };
