@@ -29,13 +29,13 @@ async function request(path, { method = "GET", body, token } = {}) {
   }
 
   if (!res.ok) {
-    // NEW: Global 401 Interceptor
-    // If the token is missing, expired, or invalid, log the user out instantly
     if (res.status === 401) {
       console.warn("Session expired. Redirecting to login...");
+      // Clear the single session key used by AuthContext to avoid the infinite loop
+      localStorage.removeItem("aikilink_auth");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      window.location.href = "/login"; 
+      window.location.href = "/login";
     }
 
     const message = data?.message || `Request failed (${res.status})`;

@@ -10,9 +10,14 @@ const homeownerProfileSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    defaultArea: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Area",
+    defaultState: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    defaultLga: {
+      type: String,
+      trim: true,
       default: null,
     },
     subscriptionStatus: {

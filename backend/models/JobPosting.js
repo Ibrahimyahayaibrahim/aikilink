@@ -1,8 +1,6 @@
 import mongoose from "mongoose";
 import { baseToJSON } from "../utils/schemaOptions.js";
 
-// Table 3.8: Job Posting
-// Status lifecycle (Section 3.14): Open -> Claimed -> Completed, with manual Reopen (Claimed -> Open)
 const jobPostingSchema = new mongoose.Schema(
   {
     homeownerId: {
@@ -32,6 +30,15 @@ const jobPostingSchema = new mongoose.Schema(
       minlength: 5,
       maxlength: 2000,
     },
+    // --- ADD BUDGET FIELDS ---
+    budgetMin: {
+      type: Number,
+      default: 0,
+    },
+    budgetMax: {
+      type: Number,
+      default: 0,
+    },
     urgency: {
       type: Boolean,
       default: false,
@@ -55,7 +62,6 @@ const jobPostingSchema = new mongoose.Schema(
   }
 );
 
-// Supports the matching algorithm (Section 3.13): filtering Open jobs by category/state/lga
 jobPostingSchema.index({ status: 1, categoryId: 1, state: 1, lga: 1 });
 
 export default mongoose.model("JobPosting", jobPostingSchema);

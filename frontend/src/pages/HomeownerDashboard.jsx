@@ -141,11 +141,19 @@ export default function HomeownerDashboard() {
   }, [jobs, q, activeCat]);
 
   const stats = useMemo(() => {
-    const active = jobs.filter((j) => ["open", "assigned", "in_progress"].includes(j.status));
-    const quotes = jobs.reduce((sum, j) => sum + (j.interests?.length || j.applicants?.length || j.applicantCount || 0), 0);
-    const done = jobs.filter((j) => j.status === "completed");
-    const spent = done.reduce((sum, j) => sum + (j.budgetMax || j.budget_max || j.budgetMin || j.budget_min || 0), 0);
-    return { active: active.length, quotes, done: done.length, spent };
+    const active = jobs.filter((j) => {
+      const s = (j.status || "").toLowerCase();
+      return ["open", "claimed", "assigned", "in_progress"].includes(s);
+    });
+
+    const quotes = jobs.reduce(
+      (sum, j) => sum + (j.applicantCount || j.interests?.length || 0),
+      0
+    );
+
+    const done = jobs.filter((j) => (j.status || "").toLowerCase() === "completed");
+
+    return { active: active.length, quotes, done: done.length };
   }, [jobs]);
 
   const hour = new Date().getHours();
@@ -239,23 +247,44 @@ export default function HomeownerDashboard() {
       </section>
 
       {/* ---------- stat tiles ---------- */}
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* ---------- stat tiles ---------- */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {[
-          { label: "Active jobs", value: stats.active, icon: Briefcase, tone: "bg-amber-100 text-amber-600", note: "open right now", delay: "0.12s" },
-          { label: "Quotes & applicants", value: stats.quotes, icon: FileText, tone: "bg-pine-50 text-pine-700", note: "across all jobs", delay: "0.2s" },
-          { label: "Jobs completed", value: stats.done, icon: BadgeCheck, tone: "bg-emerald-100 text-emerald-600", note: "all-time", delay: "0.28s" },
-          { label: "Total spent", value: stats.spent, prefix: "₦", icon: Wallet, tone: "bg-sky-100 text-sky-600", note: "on completed jobs", delay: "0.36s" },
+          {
+            label: "Active jobs",
+            value: stats.active,
+            icon: Briefcase,
+            tone: "bg-amber-100 text-amber-600",
+            note: "open right now",
+            delay: "0.12s",
+          },
+          {
+            label: "Quotes & applicants",
+            value: stats.quotes,
+            icon: FileText,
+            tone: "bg-pine-50 text-pine-700",
+            note: "across all jobs",
+            delay: "0.2s",
+          },
+          {
+            label: "Jobs completed",
+            value: stats.done,
+            icon: BadgeCheck,
+            tone: "bg-emerald-100 text-emerald-600",
+            note: "all-time",
+            delay: "0.28s",
+          },
         ].map((s) => (
           <div
             key={s.label}
-            className="anim-up group rounded-2xl border border-line bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+            className="anim-up group rounded-2xl border border-line bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
             style={{ animationDelay: s.delay }}
           >
             <span className={`grid h-10 w-10 place-items-center rounded-xl ${s.tone} transition-transform duration-300 group-hover:scale-110`}>
               <s.icon className="h-[18px] w-[18px]" />
             </span>
             <p className="mt-3 font-brand text-[22px] font-bold leading-none text-ink md:text-2xl">
-              <CountUp to={s.value} prefix={s.prefix || ""} />
+              <CountUp to={s.value} />
             </p>
             <p className="mt-1.5 text-xs font-semibold text-mist">{s.label}</p>
             <p className="mt-0.5 text-[10px] font-bold text-emerald-600/90">{s.note}</p>

@@ -224,14 +224,17 @@ export default function NavBar() {
   const [liveNotifications, setLiveNotifications] = useState([]);
 
   // NEW: Listen for WebSocket events
+  // Listen for WebSocket events
   useEffect(() => {
     if (!socket) return;
 
     const handleNewNotification = (notification) => {
-      // Force the new notification to be unread so it triggers the badge
-      const newNotif = { ...notification, unread: true };
+      // Pass through normalize() so id, time, kind, and link are shaped correctly
+      const newNotif = {
+        ...normalize(notification),
+        unread: true,
+      };
       
-      // Inject it at the very beginning of the live array
       setLiveNotifications((prev) => [newNotif, ...prev]);
     };
 
@@ -366,12 +369,12 @@ export default function NavBar() {
                   setLiveNotifications([]);
                 }}
                 onOpen={(id, link) => {
-                  markOneRead(token, id);
-                  if (link) navigate(link);
-                  setNotifOpen(false);
-                  // Clear the live notification manually if they click it
-                  setLiveNotifications((prev) => prev.filter((n) => n._id !== id));
-                }}
+    markOneRead(token, id);
+    if (link) navigate(link);
+    setNotifOpen(false);
+    // Safe dismissal checking either id representation
+    setLiveNotifications((prev) => prev.filter((n) => n.id !== id && n._id !== id));
+  }}
               />
             </div>
           </>

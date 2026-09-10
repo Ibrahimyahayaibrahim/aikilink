@@ -126,7 +126,6 @@ export const searchJobs = async (req, res) => {
 export const getMyMatches = async (req, res) => {
   const providerProfile = await getProviderProfileOrFail(req.user.id);
 
-  // NEW: Defensive check. If profile is incomplete, return 0 matches.
   if (!providerProfile.state || !providerProfile.lga || !providerProfile.categories?.length) {
     return res.json([]);
   }
@@ -134,9 +133,9 @@ export const getMyMatches = async (req, res) => {
   const jobs = await JobPosting.find({
     status: "Open",
     categoryId: { $in: providerProfile.categories },
-    // NEW: Match the exact state and lga strings from the provider's profile
-    state: providerProfile.state,
-    lga: providerProfile.lga,
+    // Use regex to avoid case-mismatch drops (e.g., "Gombe" vs "gombe")
+    state: { $regex: new RegExp(`^${providerProfile.state.trim()}$`, "i") },
+    lga: { $regex: new RegExp(`^${providerProfile.lga.trim()}$`, "i") },
   })
     .populate("categoryId")
     .sort({ created_at: -1 })
@@ -146,13 +145,49 @@ export const getMyMatches = async (req, res) => {
 };
 
 // GET /api/jobs/mine — Homeowner only
+// GET /api/jobs/mine — Homeowner only
+// GET /api/jobs/mine — Homeowner only
 export const getMyJobs = async (req, res) => {
-  const homeownerProfile = await getHomeownerProfileOrFail(req.user.id);
-  const jobs = await JobPosting.find({ homeownerId: homeownerProfile._id })
-    .populate("categoryId claimedBy")
-    .sort({ created_at: -1 })
-    .limit(MAX_PAGE_SIZE);
-  res.json(jobs);
+  try {
+    const homeownerProfile = await getHomeownerProfileOrFail(req.user.id);
+
+    const jobs = await JobPosting.find({ homeownerId: homeownerProfile._id })
+      .populate("categoryId claimedBy")
+      .sort({ created_at: -1 })
+      .limit(MAX_PAGE_SIZE)
+      .lean();
+
+    if (!jobs.length) {
+      return res.json([]);
+    }
+
+    const jobIds = jobs.map((j) => j._id);
+
+    // Mongoose .find() automatically handles ObjectId casting across documents
+    const allInterests = await JobInterestLog.find({
+      jobId: { $in: jobIds },
+    })
+      .select("jobId")
+      .lean();
+
+    console.log(`[getMyJobs] Found ${allInterests.length} total applicant interest records for homeowner ${homeownerProfile._id}`);
+
+    const countMap = {};
+    allInterests.forEach((item) => {
+      const idStr = item.jobId.toString();
+      countMap[idStr] = (countMap[idStr] || 0) + 1;
+    });
+
+    const jobsWithCounts = jobs.map((j) => ({
+      ...j,
+      applicantCount: countMap[j._id.toString()] || 0,
+    }));
+
+    res.json(jobsWithCounts);
+  } catch (error) {
+    console.error("Error fetching homeowner jobs:", error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // GET /api/jobs/assigned — Provider only.
@@ -197,22 +232,30 @@ export const expressInterest = async (req, res) => {
 
   const categoryName = job.categoryId?.name || "posted";
   
-  // Notify the homeowner — single creation (the old version fired this twice)
+  // Notify the homeowner (DB + WebSocket)
   if (homeownerProfile && homeownerProfile.userId) {
-    await Notification.create({
-      recipient: homeownerProfile.userId._id,
+    const homeownerUserId = homeownerProfile.userId._id.toString();
+
+    const notif = await Notification.create({
+      recipient: homeownerUserId,
       type: "quote",
       title: "New Artisan Interest",
       body: `An artisan is interested in your ${categoryName} job.`,
-      link: "/homeowner",
+      link: `/homeowner/jobs/${job._id}`,
     });
+
+    // Real-time socket push to homeowner's private room
+    const io = req.app.get("io");
+    if (io) {
+      io.to(homeownerUserId).emit("notification", notif);
+    }
   }
 
   res.json({
     message: "Interest recorded",
     contact: {
-      name: homeownerProfile.userId.name,
-      phone: homeownerProfile.userId.phone,
+      name: homeownerProfile?.userId?.name,
+      phone: homeownerProfile?.userId?.phone,
     },
   });
 };
@@ -275,18 +318,26 @@ export const claimJob = async (req, res) => {
   job.claimedAt = new Date();
   await job.save();
 
-  // Notify the provider
-  // Notify the provider
+  // 1. Notify the chosen provider (DB + WebSocket)
   const providerProfile = await ProviderProfile.findById(providerId).populate("userId");
 
-if (providerProfile && providerProfile.userId) {
-  await Notification.create({
-    recipient: providerProfile.userId._id, // True User ID
-    type: "claim",
-    title: "Job Claimed!",
-    body: `You have been selected for a new job. Check your active jobs!`,
-  });
-}
+  if (providerProfile && providerProfile.userId) {
+    const providerUserId = providerProfile.userId._id.toString();
+
+    const notif = await Notification.create({
+      recipient: providerUserId,
+      type: "claim",
+      title: "Job Awarded!",
+      body: `You have been selected for "${job.title}". Check your active jobs!`,
+      link: `/provider/jobs/${job._id}`,
+    });
+
+    // Real-time socket emission to the artisan's private room
+    const io = req.app.get("io");
+    if (io) {
+      io.to(providerUserId).emit("notification", notif);
+    }
+  }
 
   const otherInterestedProviderIds = (
     await JobInterestLog.find({ jobId: job._id, providerId: { $ne: providerId } })

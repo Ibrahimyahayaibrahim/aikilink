@@ -17,7 +17,7 @@ import userRoutes from "./routes/userRoutes.js";
 import providerRoutes from "./routes/providerRoutes.js";
 import jobRoutes from "./routes/jobRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
-import { categoryRouter, areaRouter } from "./routes/lookupRoutes.js";
+import { categoryRouter } from "./routes/lookupRoutes.js";
 
 // Import HTTP and Socket.io
 import http from "http";
@@ -59,7 +59,6 @@ io.use((socket, next) => {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Ensure this matches how you structured your JWT payload (usually id or userId)
     socket.userId = decoded.id; 
     next();
   } catch (err) {
@@ -104,7 +103,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/providers", providerRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/categories", categoryRouter);
-app.use("/api/areas", areaRouter);
 app.use("/api/notifications", notificationRoutes);
 
 // --- 404 + error handling ---
@@ -117,7 +115,6 @@ async function start() {
   assertSecureConfig();
   await connectDB();
   
-  // IMPORTANT: Server listens, binding both Express and Socket.io to the port
   server.listen(PORT, () => {
     console.log(`[server] Listening on http://localhost:${PORT}`);
   });
