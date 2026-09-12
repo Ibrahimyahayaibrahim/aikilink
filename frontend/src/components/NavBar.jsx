@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSocket } from "../context/SocketContext";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
@@ -212,24 +212,20 @@ function NotifPanel({ notifications, loaded, onMarkAll, onOpen }) {
    ================================================================ */
 export default function NavBar() {
   const { isAuthenticated, user, logout } = useAuth();
-  const { socket } = useSocket(); // NEW: Grab the WebSocket
+  const { socket } = useSocket();
   
-  // Rename the destructured notifications to initialNotifications
   const { token, notifications: initialNotifications, loaded } = useNotifications();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  // NEW: State specifically for real-time notifications
   const [liveNotifications, setLiveNotifications] = useState([]);
 
-  // NEW: Listen for WebSocket events
-  // Listen for WebSocket events
+  // 1. Listen for WebSocket events in real-time
   useEffect(() => {
     if (!socket) return;
 
     const handleNewNotification = (notification) => {
-      // Pass through normalize() so id, time, kind, and link are shaped correctly
       const newNotif = {
         ...normalize(notification),
         unread: true,
@@ -245,10 +241,30 @@ export default function NavBar() {
     };
   }, [socket]);
 
-  // NEW: Combine both arrays. Live notifications appear first.
-  const allNotifications = [...liveNotifications, ...(initialNotifications || [])];
+  // 2. Clear live duplicates whenever the database background-fetch runs
+  useEffect(() => {
+    if (!initialNotifications?.length) return;
+    const fetchedIds = new Set(
+      initialNotifications.map((n) => (n.id || n._id)?.toString())
+    );
+    setLiveNotifications((prev) =>
+      prev.filter((n) => !fetchedIds.has((n.id || n._id)?.toString()))
+    );
+  }, [initialNotifications]);
+
+  // 3. Deduplicate combined array by unique ID
+  const allNotifications = useMemo(() => {
+    const combined = [...liveNotifications, ...(initialNotifications || [])];
+    const seen = new Set();
+    
+    return combined.filter((n) => {
+      const id = (n.id || n._id)?.toString();
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [liveNotifications, initialNotifications]);
   
-  // Calculate the total unread count across both arrays
   const unread = allNotifications.filter((n) => n.unread).length;
 
   const handleLogout = () => {
@@ -360,21 +376,18 @@ export default function NavBar() {
             <button className="fixed inset-0 z-40 cursor-default" onClick={() => setNotifOpen(false)} aria-label="Close notifications" />
             <div className="anim-scale absolute right-4 top-full z-50 mt-2 hidden w-[360px] origin-top-right sm:block">
               <NotifPanel
-                /* Pass the combined array to the panel */
                 notifications={allNotifications}
                 loaded={loaded}
                 onMarkAll={() => {
                   markAllRead(token);
-                  // Clear live notifications since they are now marked as read in the DB
                   setLiveNotifications([]);
                 }}
                 onOpen={(id, link) => {
-    markOneRead(token, id);
-    if (link) navigate(link);
-    setNotifOpen(false);
-    // Safe dismissal checking either id representation
-    setLiveNotifications((prev) => prev.filter((n) => n.id !== id && n._id !== id));
-  }}
+                  markOneRead(token, id);
+                  if (link) navigate(link);
+                  setNotifOpen(false);
+                  setLiveNotifications((prev) => prev.filter((n) => n.id !== id && n._id !== id));
+                }}
               />
             </div>
           </>

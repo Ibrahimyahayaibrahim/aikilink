@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertCircle, ArrowRight, BadgeCheck, Briefcase, CheckCircle2, Clock,
   Hammer, MapPin, Sparkles, Star, Zap,
@@ -85,6 +85,7 @@ function jobLocation(job) {
 
 /* ---------- available-job card (provider flavour) ---------- */
 function MatchCard({ job, index, interested, busy, onInterest }) {
+  const navigate = useNavigate();
   const category = job.categoryId?.name || "Job";
   const location = jobLocation(job);
   const min = job.budgetMin || job.budget_min;
@@ -92,7 +93,8 @@ function MatchCard({ job, index, interested, busy, onInterest }) {
 
   return (
     <article
-      className="anim-up group relative flex flex-col rounded-2xl border border-line bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-pine/25 hover:shadow-xl"
+      onClick={() => navigate(ROUTES.jobDetail(job._id))}
+      className="anim-up group relative flex cursor-pointer flex-col rounded-2xl border border-line bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-pine/25 hover:shadow-xl"
       style={{ animationDelay: `${Math.min(index, 8) * 0.07}s` }}
     >
       <div className="flex items-center gap-2">
@@ -106,11 +108,11 @@ function MatchCard({ job, index, interested, busy, onInterest }) {
         )}
       </div>
 
-      <Link to={ROUTES.jobDetail(job._id)} className="mt-3 block">
+      <div className="mt-3 block">
         <h3 className="line-clamp-2 font-brand text-[17px] font-bold leading-snug text-ink transition-colors group-hover:text-pine-700">
           {job.title || `${category} needed${location ? ` in ${location}` : ""}`}
         </h3>
-      </Link>
+      </div>
       <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-mist">{job.description}</p>
 
       <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-mist">
@@ -145,7 +147,10 @@ function MatchCard({ job, index, interested, busy, onInterest }) {
         ) : (
           <button
             disabled={busy}
-            onClick={() => onInterest(job._id)}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevents triggering the article's own onClick
+              onInterest(job._id);
+            }}
             className="btn-press inline-flex items-center gap-1.5 rounded-2xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-pine-900 shadow-sm hover:bg-amber-400 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? <Spinner /> : <Sparkles className="h-3.5 w-3.5" />}
@@ -160,6 +165,7 @@ function MatchCard({ job, index, interested, busy, onInterest }) {
 export default function ProviderDashboard() {
   const { token, user } = useAuth();
 
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [matches, setMatches] = useState([]);
   const [allJobs, setAllJobs] = useState([]);
@@ -214,8 +220,12 @@ export default function ProviderDashboard() {
     try {
       await api.post(`/jobs/${jobId}/interest`, {}, token);
       setInterestedIds((m) => ({ ...m, [jobId]: true }));
+      // Immediately redirect to this job's detail screen with the contact card
+      navigate(ROUTES.jobDetail(jobId));
     } catch (err) {
       setError(err.message || "Could not send interest — you may have already applied.");
+      // If already expressed interest previously, still take them to view the contact
+      navigate(ROUTES.jobDetail(jobId));
     } finally {
       setBusyId(null);
     }
@@ -249,7 +259,7 @@ export default function ProviderDashboard() {
   }
 
   return (
-    <div className="space-y-9 md:space-y-11">
+    <div className="space-y-9 pb-12 md:space-y-11 md:pb-16">
       {/* ---------- header ---------- */}
       <div className="anim-up flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -466,14 +476,14 @@ export default function ProviderDashboard() {
         )}
       </section>
 
-      {/* ---------- live ticker ---------- */}
-      <div className="anim-up ticker flex h-11 items-center overflow-hidden rounded-2xl bg-pine-800 text-cream shadow-sm" style={{ animationDelay: "0.2s" }}>
+    {/* ---------- live ticker ---------- */}
+      <div className="anim-up ticker flex h-11 items-center overflow-hidden rounded-2xl bg-pine-800 text-cream shadow-sm mb-8" style={{ animationDelay: "0.2s" }}>
         <span className="relative z-10 flex h-full shrink-0 items-center gap-1.5 bg-pine px-4 text-[10px] font-bold tracking-[0.2em] text-amber-400">
           <span className="pulse-soft h-1.5 w-1.5 rounded-full bg-amber-400" /> TIPS
         </span>
-        <div className="ticker-track items-center gap-10 pl-6">
+        <div className="ticker-track flex w-max shrink-0 items-center gap-10 pl-6">
           {[...TICKER, ...TICKER].map((t, i) => (
-            <span key={i} className="flex items-center gap-2 whitespace-nowrap text-xs font-medium text-cream/80">
+            <span key={i} className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium text-cream/80">
               <span className="h-1 w-1 rounded-full bg-amber-500/70" /> {t}
             </span>
           ))}

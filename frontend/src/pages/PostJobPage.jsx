@@ -8,7 +8,7 @@ import Spinner from "../components/Spinner";
 
 import { nigerianLocations } from "../data/nigerianLocations";
 
-const ROUTES = { back: "/homeowner/jobs" };
+const ROUTES = { back: "/homeowner" };
 
 const DESC_MAX = 600;
 

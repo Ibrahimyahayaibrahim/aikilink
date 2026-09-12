@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import JobPosting from "../models/JobPosting.js";
 import JobInterestLog from "../models/JobInterestLog.js";
 import ProviderProfile from "../models/ProviderProfile.js";
@@ -201,11 +202,44 @@ export const getMyAssignedJobs = async (req, res) => {
   res.json(jobs);
 };
 
-// GET /api/jobs/:id 
+// GET /api/jobs/:id
+// GET /api/jobs/:id
+// GET /api/jobs/:id
+// GET /api/jobs/:id
 export const getJobById = async (req, res) => {
-  const job = await JobPosting.findById(req.params.id).populate("categoryId claimedBy");
+  const job = await JobPosting.findById(req.params.id)
+    .populate("categoryId", "name")
+    .populate({
+      path: "claimedBy",
+      select: "userId rating completedJobsCount state lga",
+      populate: {
+        path: "userId",
+        select: "name phone avatar",
+      },
+    });
+
   if (!job) return res.status(404).json({ message: "Job not found" });
-  res.json(job);
+
+  const jobObj = job.toObject();
+
+  // Verify whether the logged-in user owns this job
+  let isOwner = false;
+  const requesterId = req.user?.id || req.user?._id;
+
+  if (requesterId) {
+    const homeownerProfile = await mongoose.model("HomeownerProfile").findOne({ userId: requesterId });
+    if (homeownerProfile && String(job.homeownerId) === String(homeownerProfile._id)) {
+      isOwner = true;
+    }
+  }
+
+  // ARTISAN PRIVACY GATE:
+  // If the requester is not the job's owner, strip the phone number
+  if (!isOwner && jobObj.claimedBy?.userId) {
+    delete jobObj.claimedBy.userId.phone;
+  }
+
+  res.json(jobObj);
 };
 
 // POST /api/jobs/:id/interest  (FR9) — Provider only
@@ -291,13 +325,15 @@ export const getInterestedProviders = async (req, res) => {
 };
 
 // PATCH /api/jobs/:id/claim  (FR10, FR11) — Homeowner only
+// PATCH /api/jobs/:id/claim  (FR10, FR11) — Homeowner only
 export const claimJob = async (req, res) => {
   const { providerId } = req.body;
   if (!isValidObjectId(providerId)) {
     return res.status(400).json({ message: "A valid providerId is required" });
   }
 
-  const job = await JobPosting.findById(req.params.id);
+  // 1. Populate categoryId to access the trade name
+  const job = await JobPosting.findById(req.params.id).populate("categoryId");
   if (!job) return res.status(404).json({ message: "Job not found" });
 
   const homeownerProfile = await getHomeownerProfileOrFail(req.user.id);
@@ -318,17 +354,18 @@ export const claimJob = async (req, res) => {
   job.claimedAt = new Date();
   await job.save();
 
-  // 1. Notify the chosen provider (DB + WebSocket)
+  // 2. Notify the chosen provider (DB + WebSocket)
   const providerProfile = await ProviderProfile.findById(providerId).populate("userId");
 
   if (providerProfile && providerProfile.userId) {
     const providerUserId = providerProfile.userId._id.toString();
+    const tradeName = job.categoryId?.name || "posted";
 
     const notif = await Notification.create({
       recipient: providerUserId,
       type: "claim",
       title: "Job Awarded!",
-      body: `You have been selected for "${job.title}". Check your active jobs!`,
+      body: `You have been selected for the ${tradeName} job. Check your active jobs!`,
       link: `/provider/jobs/${job._id}`,
     });
 

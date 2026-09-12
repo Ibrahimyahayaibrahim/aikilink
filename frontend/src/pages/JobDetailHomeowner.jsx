@@ -180,10 +180,11 @@ export default function JobDetailHomeowner() {
     );
   }
 
-  const claimedName = job.claimedBy?.userId?.name || job.claimedBy?.name || "a provider";
-  const claimedPhone = job.claimedBy?.phone || job.claimedBy?.userId?.phone;
-  const status = String(job.status || "Open");
-  const locationLabel = (job?.lga && job?.state) ? `${job.lga}, ${job.state}` : "Location pending";
+ const claimedUser = job?.claimedBy?.userId;
+const claimedName = claimedUser?.name || job?.claimedBy?.name || "Assigned Artisan";
+const claimedPhone = claimedUser?.phone || job?.claimedBy?.phone;
+const status = String(job?.status || "Open");
+const locationLabel = (job?.lga && job?.state) ? `${job.lga}, ${job.state}` : "Location pending";
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">

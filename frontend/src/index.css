@@ -971,3 +971,23 @@ a .docket:hover, a .card:hover {
   0%, 100% { transform: translateY(0); } 
   50% { transform: translateY(-8px); } 
 }
+/* Continuous marquee scrolling */
+@keyframes tickerScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: tickerScroll 28s linear infinite;
+}
+
+/* Optional: pause scrolling on hover so users can read */
+.ticker:hover .ticker-track {
+  animation-play-state: paused;
+}

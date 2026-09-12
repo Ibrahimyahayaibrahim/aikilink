@@ -128,4 +128,5 @@ if (process.argv[1] && process.argv[1].endsWith("server.js")) {
 }
 
 // Export both for potential testing environments
+export default app;
 export { app, server };
