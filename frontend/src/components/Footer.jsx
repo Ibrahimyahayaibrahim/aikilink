@@ -36,19 +36,19 @@ export default function Footer() {
       <div className="relative mx-auto max-w-6xl px-4 pb-8 pt-14 md:px-6 md:pt-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1.2fr]">
           {/* ---------- brand column ---------- */}
-          <div className="anim-up">
-            <Link to="/" className="btn-press inline-flex items-center gap-2.5">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-cream shadow-md">
-                <Logo size={26} />
-              </span>
-              <span className="font-brand text-xl font-bold tracking-tight text-cream">
-                aiki<span className="text-amber-400">link</span>
-                <span className="text-amber-400">.</span>
-              </span>
-            </Link>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-cream/65">
-              Connecting homeowners and offices with trusted local electricians, plumbers, mechanics and more — across Nigeria.
-            </p>
+<div className="anim-up">
+  <Link to="/" className="btn-press inline-flex items-center gap-2.5">
+    <span className="grid h-10 w-10 place-items-center rounded-xl bg-cream shadow-md">
+      <Logo size={22} withText={false} to={null} />
+    </span>
+    <span className="font-brand text-xl font-bold tracking-tight text-cream">
+      aiki<span className="text-amber-400">link</span>
+      <span className="text-amber-400">.</span>
+    </span>
+  </Link>
+  <p className="mt-4 max-w-xs text-sm leading-relaxed text-cream/65">
+    Connecting homeowners and offices with trusted local electricians, plumbers, mechanics and more — across Nigeria.
+  </p>
             <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-cream/15 bg-cream/5 px-3 py-1.5 text-[11px] font-bold text-amber-400">
               <Sparkles className="h-3 w-3" /> Free while we grow
             </p>

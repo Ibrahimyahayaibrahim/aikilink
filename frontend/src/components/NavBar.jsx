@@ -11,15 +11,15 @@ import Logo from "./Logo";
 import Avatar from "./Avatar";
 
 /* ================================================================
-   ROUTES — verified against frontend/src/App.jsx (commit 80a5ada).
+   ROUTES — verified against frontend/src/App.jsx.
    ================================================================ */
 const ROUTES = {
   login: "/login",
   register: "/register",
   homeownerJobs: "/homeowner",
   postJob: "/homeowner/post",
-  providerFeed: "/provider",       // Fixed: matches your ProviderDashboard
-  providerWork: "/provider/work",  // Fixed: matches your ProviderMyWork
+  providerFeed: "/provider",
+  providerWork: "/provider/work",
   providerProfile: "/provider/profile",
 };
 
@@ -62,7 +62,7 @@ const normalize = (n) => ({
   unread: !(n.read ?? n.isRead ?? false),
 });
 
-/* ---------- tiny shared store: keeps badge + dropdown + mobile sheet in sync ---------- */
+/* ---------- shared store: keeps badge + dropdown + mobile sheet in sync ---------- */
 let cache = { list: [], loaded: false };
 const listeners = new Set();
 const emit = () => listeners.forEach((fn) => fn());
@@ -72,7 +72,7 @@ async function fetchNotifications(token) {
     const data = await api.get("/notifications", token);
     cache = { list: (Array.isArray(data) ? data : data?.notifications || []).map(normalize), loaded: true };
   } catch (err) {
-    cache = { ...cache, loaded: true }; // endpoint missing — fail quietly, bell just stays empty
+    cache = { ...cache, loaded: true };
   }
   emit();
 }
@@ -83,7 +83,7 @@ async function markAllRead(token) {
   try {
     await api.patch("/notifications/read", {}, token);
   } catch (err) {
-    /* optimistic — ignore */
+    /* optimistic */
   }
 }
 
@@ -93,7 +93,7 @@ async function markOneRead(token, id) {
   try {
     await api.patch(`/notifications/${id}/read`, {}, token);
   } catch (err) {
-    /* optional endpoint — ignore */
+    /* optional endpoint */
   }
 }
 
@@ -118,7 +118,7 @@ function useNotifications() {
   return { token, notifications: cache.list, loaded: cache.loaded };
 }
 
-/* ---------- dropdown / sheet content ---------- */
+/* ---------- dropdown panel content ---------- */
 const KIND = {
   quote: { icon: FileText, cls: "bg-amber-100 text-amber-600" },
   verify: { icon: ShieldCheck, cls: "bg-pine-50 text-pine-700" },
@@ -230,7 +230,6 @@ export default function NavBar() {
         ...normalize(notification),
         unread: true,
       };
-      
       setLiveNotifications((prev) => [newNotif, ...prev]);
     };
 
@@ -303,10 +302,11 @@ export default function NavBar() {
         </nav>
 
         <div className="flex items-center gap-2 md:gap-2.5">
+          {/* Notification Bell — Visible on both mobile and desktop right next to menu */}
           {isAuthenticated && (
             <button
               onClick={() => setNotifOpen((o) => !o)}
-              className={`btn-press relative hidden rounded-2xl border p-2.5 sm:block ${
+              className={`btn-press relative rounded-2xl border p-2.5 ${
                 notifOpen ? "border-amber-400 bg-amber-50 text-amber-600" : "border-line bg-card text-mist hover:text-pine"
               }`}
               title="Notifications"
@@ -370,11 +370,11 @@ export default function NavBar() {
           </button>
         </div>
 
-        {/* desktop notifications dropdown */}
+        {/* notifications dropdown — handles mobile and desktop bounds */}
         {notifOpen && (
           <>
             <button className="fixed inset-0 z-40 cursor-default" onClick={() => setNotifOpen(false)} aria-label="Close notifications" />
-            <div className="anim-scale absolute right-4 top-full z-50 mt-2 hidden w-[360px] origin-top-right sm:block">
+            <div className="anim-scale absolute right-2 top-full z-50 mt-2 w-[calc(100vw-1rem)] max-w-[360px] origin-top-right sm:right-4 sm:w-[360px]">
               <NotifPanel
                 notifications={allNotifications}
                 loaded={loaded}
@@ -438,8 +438,7 @@ export default function NavBar() {
 }
 
 /* ================================================================
-   MobileTabBar — optional. Your App.jsx doesn't render it yet;
-   add <MobileTabBar /> after <Footer /> if you want the bottom bar.
+   MobileTabBar — optional bottom bar.
    ================================================================ */
 function Tab({ to, icon: Icon, label }) {
   return (

@@ -184,7 +184,7 @@ export default function HomeownerDashboard() {
       <section className="anim-up relative overflow-hidden rounded-2xl bg-pine p-6 text-cream shadow-lg md:p-9" style={{ animationDelay: "0.08s" }}>
         <div className="dot-grid pointer-events-none absolute inset-0" />
         <span className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full border-[22px] border-amber-500/15" />
-        <span className="pointer-events-none absolute -right-2 -top-5 h-24 w-24 animate-[spinSlow_45s_linear_infinite] rounded-full border-2 border-dashed border-cream/20" />
+        <span className="pointer-events-none absolute -right-2 -top-5 h-24 w-24 animate-[spin_45s_linear_infinite] rounded-full border-2 border-dashed border-cream/20" />
 
         <div className="relative max-w-2xl">
           <h2 className="font-brand text-[24px] font-bold leading-tight tracking-tight md:text-[32px]">
