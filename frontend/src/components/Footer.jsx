@@ -6,12 +6,45 @@ import { FacebookIcon, InstagramIcon, XIcon, LinkedInIcon, WhatsAppIcon } from "
 const linkCls =
   "group inline-flex items-center gap-1.5 text-sm font-medium text-cream/65 transition-all duration-200 hover:translate-x-0.5 hover:text-amber-400";
 
+function TikTokIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.3-.002.6.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.82 4.47 6.27 6.27 0 0 0 1.9-4.47V8.04a8.16 8.16 0 0 0 4.87 1.6V6.69z" />
+    </svg>
+  );
+}
+
 const SOCIALS = [
-  { label: "Facebook", Icon: FacebookIcon },
-  { label: "Instagram", Icon: InstagramIcon },
-  { label: "X (Twitter)", Icon: XIcon },
-  { label: "LinkedIn", Icon: LinkedInIcon },
-  { label: "WhatsApp", Icon: WhatsAppIcon },
+  {
+    label: "Facebook",
+    Icon: FacebookIcon,
+    href: "https://www.facebook.com/aikilink",
+  },
+  {
+    label: "Instagram",
+    Icon: InstagramIcon,
+    href: "https://www.instagram.com/Aiki_link",
+  },
+  {
+    label: "X (Twitter)",
+    Icon: XIcon,
+    href: "https://x.com/aikilink",
+  },
+  {
+    label: "TikTok",
+    Icon: TikTokIcon,
+    href: "https://www.tiktok.com/@aiki_link",
+  },
+  {
+    label: "LinkedIn",
+    Icon: LinkedInIcon,
+    href: "https://www.linkedin.com/in/ibrahim-yahaya-ibrahim-8832342a4",
+  },
+  {
+    label: "WhatsApp",
+    Icon: WhatsAppIcon,
+    href: "https://wa.me/2349123804643",
+  },
 ];
 
 const PLATFORM_LINKS = [
@@ -36,27 +69,29 @@ export default function Footer() {
       <div className="relative mx-auto max-w-6xl px-4 pb-8 pt-14 md:px-6 md:pt-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1.2fr]">
           {/* ---------- brand column ---------- */}
-<div className="anim-up">
-  <Link to="/" className="btn-press inline-flex items-center gap-2.5">
-    <span className="grid h-10 w-10 place-items-center rounded-xl bg-cream shadow-md">
-      <Logo size={22} withText={false} to={null} />
-    </span>
-    <span className="font-brand text-xl font-bold tracking-tight text-cream">
-      aiki<span className="text-amber-400">link</span>
-      <span className="text-amber-400">.</span>
-    </span>
-  </Link>
-  <p className="mt-4 max-w-xs text-sm leading-relaxed text-cream/65">
-    Connecting homeowners and offices with trusted local electricians, plumbers, mechanics and more — across Nigeria.
-  </p>
+          <div className="anim-up">
+            <Link to="/" className="btn-press inline-flex items-center gap-2.5">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-cream shadow-md">
+                <Logo size={22} withText={false} to={null} />
+              </span>
+              <span className="font-brand text-xl font-bold tracking-tight text-cream">
+                aiki<span className="text-amber-400">link</span>
+                <span className="text-amber-400">.</span>
+              </span>
+            </Link>
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-cream/65">
+              Connecting homeowners and offices with trusted local electricians, plumbers, mechanics and more — across Nigeria.
+            </p>
             <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-cream/15 bg-cream/5 px-3 py-1.5 text-[11px] font-bold text-amber-400">
               <Sparkles className="h-3 w-3" /> Free while we grow
             </p>
-            <div className="mt-5 flex gap-2">
-              {SOCIALS.map(({ label, Icon }) => (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {SOCIALS.map(({ label, Icon, href }) => (
                 <a
                   key={label}
-                  href="#"
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={label}
                   className="grid h-9 w-9 place-items-center rounded-xl border border-cream/15 text-cream/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-400/60 hover:bg-amber-500/10 hover:text-amber-400"
                 >
